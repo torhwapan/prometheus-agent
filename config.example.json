@@ -1,0 +1,70 @@
+{
+  "prometheus": {
+    "base_url": "http://localhost:9090",
+    "timeout_seconds": 20,
+    "headers": {},
+    "basic_auth": {
+      "username": "",
+      "password": ""
+    }
+  },
+  "inspection": {
+    "range_hours": 24,
+    "step_seconds": 300,
+    "forecast_hours": 24,
+    "top_n_series": 10,
+    "min_points": 4
+  },
+  "items": [
+    {
+      "id": "host_cpu_usage",
+      "name": "Host CPU Usage",
+      "description": "Average non-idle CPU usage by instance.",
+      "promql": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+      "unit": "%",
+      "direction": "higher_is_bad",
+      "warning": 75,
+      "critical": 90
+    },
+    {
+      "id": "host_memory_usage",
+      "name": "Host Memory Usage",
+      "description": "Memory usage by instance based on MemAvailable.",
+      "promql": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+      "unit": "%",
+      "direction": "higher_is_bad",
+      "warning": 80,
+      "critical": 92
+    },
+    {
+      "id": "filesystem_usage",
+      "name": "Filesystem Usage",
+      "description": "Filesystem capacity usage by instance and mount point.",
+      "promql": "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",mountpoint!~\"/run.*\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",mountpoint!~\"/run.*\"})) * 100",
+      "unit": "%",
+      "direction": "higher_is_bad",
+      "warning": 80,
+      "critical": 90
+    },
+    {
+      "id": "filesystem_inode_usage",
+      "name": "Filesystem Inode Usage",
+      "description": "Inode usage by instance and mount point.",
+      "promql": "(1 - (node_filesystem_files_free{fstype!~\"tmpfs|overlay\"} / node_filesystem_files{fstype!~\"tmpfs|overlay\"})) * 100",
+      "unit": "%",
+      "direction": "higher_is_bad",
+      "warning": 75,
+      "critical": 90
+    },
+    {
+      "id": "target_availability",
+      "name": "Target Availability",
+      "description": "Scrape target availability percentage.",
+      "promql": "avg by(job, instance) (avg_over_time(up[5m])) * 100",
+      "unit": "%",
+      "direction": "lower_is_bad",
+      "warning": 99,
+      "critical": 95
+    }
+  ]
+}

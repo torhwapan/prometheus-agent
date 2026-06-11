@@ -1,0 +1,43 @@
+{
+  "targets": [
+    {
+      "id": "local-dev",
+      "name": "Local Dev Prometheus",
+      "aliases": ["127.0.0.1", "localhost", "本地", "dev-prometheus"],
+      "env": "dev",
+      "base_url": "http://127.0.0.1:9090",
+      "grafana": {
+        "base_url": "http://127.0.0.1:3000",
+        "datasource_uid": "prom-local",
+        "auth": {
+          "type": "none"
+        }
+      },
+      "auth": {
+        "type": "none"
+      },
+      "defaults": {
+        "range_hours": 24,
+        "step_seconds": 60,
+        "forecast_hours": 24
+      },
+      "domains": {
+        "host": {
+          "job_patterns": ["node", "node-exporter"]
+        },
+        "redis": {
+          "job_patterns": ["redis", "redis-exporter"]
+        },
+        "jvm": {
+          "job_patterns": ["jvm", "spring", "java"]
+        },
+        "rabbitmq": {
+          "job_patterns": ["rabbitmq"]
+        },
+        "business": {
+          "job_patterns": []
+        }
+      }
+    }
+  ]
+}

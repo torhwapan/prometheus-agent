@@ -1,0 +1,47 @@
+{
+  "domain": "rabbitmq",
+  "items": [
+    {
+      "id": "rabbitmq_queue_ready",
+      "name": "RabbitMQ Queue Ready Messages",
+      "description": "Ready message backlog by queue.",
+      "current_promql": "rabbitmq_queue_messages_ready",
+      "range_promql": "rabbitmq_queue_messages_ready",
+      "value_type": "number",
+      "unit": "",
+      "analysis_type": "queue_backlog",
+      "direction": "higher_is_bad",
+      "warning": 1000,
+      "critical": 10000,
+      "labels_to_keep": ["job", "instance", "vhost", "queue"]
+    },
+    {
+      "id": "rabbitmq_queue_unacked",
+      "name": "RabbitMQ Queue Unacked Messages",
+      "description": "Unacked messages by queue.",
+      "current_promql": "rabbitmq_queue_messages_unacked",
+      "range_promql": "rabbitmq_queue_messages_unacked",
+      "value_type": "number",
+      "unit": "",
+      "analysis_type": "queue_backlog",
+      "direction": "higher_is_bad",
+      "warning": 1000,
+      "critical": 10000,
+      "labels_to_keep": ["job", "instance", "vhost", "queue"]
+    },
+    {
+      "id": "rabbitmq_consumers",
+      "name": "RabbitMQ Consumers",
+      "description": "Consumer count by queue.",
+      "current_promql": "rabbitmq_queue_consumers",
+      "range_promql": "rabbitmq_queue_consumers",
+      "value_type": "number",
+      "unit": "",
+      "analysis_type": "availability",
+      "direction": "lower_is_bad",
+      "warning": 1,
+      "critical": 0,
+      "labels_to_keep": ["job", "instance", "vhost", "queue"]
+    }
+  ]
+}

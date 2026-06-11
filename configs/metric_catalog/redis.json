@@ -1,0 +1,75 @@
+{
+  "domain": "redis",
+  "items": [
+    {
+      "id": "redis_up",
+      "name": "Redis Availability",
+      "description": "Redis exporter availability.",
+      "current_promql": "redis_up",
+      "range_promql": "redis_up",
+      "value_type": "number",
+      "unit": "",
+      "analysis_type": "availability",
+      "direction": "lower_is_bad",
+      "warning": 1,
+      "critical": 0,
+      "labels_to_keep": ["job", "instance"]
+    },
+    {
+      "id": "redis_memory_usage",
+      "name": "Redis Memory Usage",
+      "description": "Redis used memory as a percentage of configured maxmemory.",
+      "current_promql": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+      "range_promql": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+      "value_type": "percent",
+      "unit": "%",
+      "analysis_type": "growth_to_limit",
+      "direction": "higher_is_bad",
+      "warning": 75,
+      "critical": 90,
+      "labels_to_keep": ["job", "instance"]
+    },
+    {
+      "id": "redis_connected_clients",
+      "name": "Redis Connected Clients",
+      "description": "Current Redis client connection count.",
+      "current_promql": "redis_connected_clients",
+      "range_promql": "redis_connected_clients",
+      "value_type": "number",
+      "unit": "",
+      "analysis_type": "threshold_trend",
+      "direction": "higher_is_bad",
+      "warning": 800,
+      "critical": 1000,
+      "labels_to_keep": ["job", "instance"]
+    },
+    {
+      "id": "redis_evicted_keys_rate",
+      "name": "Redis Evicted Keys Rate",
+      "description": "Rate of evicted keys.",
+      "current_promql": "rate(redis_evicted_keys_total[5m])",
+      "range_promql": "rate(redis_evicted_keys_total[5m])",
+      "value_type": "number",
+      "unit": "/s",
+      "analysis_type": "rate_change",
+      "direction": "higher_is_bad",
+      "warning": 1,
+      "critical": 10,
+      "labels_to_keep": ["job", "instance"]
+    },
+    {
+      "id": "redis_keyspace_hit_rate",
+      "name": "Redis Keyspace Hit Rate",
+      "description": "Redis cache hit rate.",
+      "current_promql": "rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m])) * 100",
+      "range_promql": "rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m])) * 100",
+      "value_type": "percent",
+      "unit": "%",
+      "analysis_type": "availability",
+      "direction": "lower_is_bad",
+      "warning": 90,
+      "critical": 80,
+      "labels_to_keep": ["job", "instance"]
+    }
+  ]
+}

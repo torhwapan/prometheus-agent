@@ -1,0 +1,47 @@
+{
+  "domain": "host",
+  "items": [
+    {
+      "id": "host_cpu_usage",
+      "name": "Host CPU Usage",
+      "description": "Average non-idle CPU usage by instance.",
+      "current_promql": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+      "range_promql": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+      "value_type": "percent",
+      "unit": "%",
+      "analysis_type": "threshold_trend",
+      "direction": "higher_is_bad",
+      "warning": 75,
+      "critical": 90,
+      "labels_to_keep": ["job", "instance"]
+    },
+    {
+      "id": "host_memory_usage",
+      "name": "Host Memory Usage",
+      "description": "Memory usage by instance based on MemAvailable.",
+      "current_promql": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+      "range_promql": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+      "value_type": "percent",
+      "unit": "%",
+      "analysis_type": "threshold_trend",
+      "direction": "higher_is_bad",
+      "warning": 80,
+      "critical": 92,
+      "labels_to_keep": ["job", "instance"]
+    },
+    {
+      "id": "filesystem_usage",
+      "name": "Filesystem Usage",
+      "description": "Filesystem capacity usage by mount point.",
+      "current_promql": "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",mountpoint!~\"/run.*\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",mountpoint!~\"/run.*\"})) * 100",
+      "range_promql": "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",mountpoint!~\"/run.*\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",mountpoint!~\"/run.*\"})) * 100",
+      "value_type": "percent",
+      "unit": "%",
+      "analysis_type": "growth_to_limit",
+      "direction": "higher_is_bad",
+      "warning": 80,
+      "critical": 90,
+      "labels_to_keep": ["job", "instance", "mountpoint", "device"]
+    }
+  ]
+}
