@@ -12,3 +12,4 @@ env/
 *.log
 report.html
 redis_report.html
+data_v4/
