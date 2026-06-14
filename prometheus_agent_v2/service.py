@@ -6,6 +6,7 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, Mapping, Tuple
 
+from .ai_inputs import build_ai_series_inputs, merge_ai_series_findings
 from .analysis import analyze_query_results
 from .catalog import catalog_summary, load_catalog
 from .planner import plan_from_payload
@@ -24,6 +25,8 @@ class PrometheusAgentV2App:
             ("POST", "/v2/plan"): self.plan,
             ("POST", "/v2/query"): self.query,
             ("POST", "/v2/analyze"): self.analyze,
+            ("POST", "/v2/build-ai-series-inputs"): self.build_ai_series_inputs,
+            ("POST", "/v2/merge-ai-series-findings"): self.merge_ai_series_findings,
             ("POST", "/v2/merge-ai-comments"): self.merge_ai_comments,
             ("POST", "/v2/report"): self.report,
             ("POST", "/v2/run"): self.run,
@@ -68,6 +71,26 @@ class PrometheusAgentV2App:
         if not isinstance(query_results, list):
             return 400, {"ok": False, "error": "results_required"}
         return 200, analyze_query_results(query_results)
+
+    def build_ai_series_inputs(self, payload: Mapping[str, Any]) -> HandlerResult:
+        query_results = payload.get("results")
+        analysis = payload.get("analysis")
+        if not isinstance(query_results, list) or not isinstance(analysis, Mapping):
+            return 400, {"ok": False, "error": "results_and_analysis_required"}
+        result = build_ai_series_inputs(
+            query_results=query_results,
+            analysis=analysis,
+            max_points_per_series=int(payload.get("max_points_per_series", 24)),
+            risky_only=bool(payload.get("risky_only", False)),
+        )
+        return 200, result
+
+    def merge_ai_series_findings(self, payload: Mapping[str, Any]) -> HandlerResult:
+        analysis = payload.get("analysis")
+        findings = payload.get("findings")
+        if not isinstance(analysis, Mapping) or not isinstance(findings, list):
+            return 400, {"ok": False, "error": "analysis_and_findings_required"}
+        return 200, merge_ai_series_findings(analysis, findings)
 
     def merge_ai_comments(self, payload: Mapping[str, Any]) -> HandlerResult:
         analysis = payload.get("analysis")

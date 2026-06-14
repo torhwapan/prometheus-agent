@@ -1,45 +1,77 @@
 ---
 name: prometheus-v2-analysis-explanation
-description: Generate short AI explanations for Prometheus metric samples and cross-metric correlation based strictly on structured data from v2 Python tools. Use when producing <=100 character or <=100 word metric comments, root-cause hypotheses, and operator suggestions after deterministic analysis has already run.
+description: Generate AI supplemental analysis for Prometheus metric range samples and cross-metric correlation based strictly on structured data from v2 Python tools. Use when analyzing sampled time-series data from /v2/build-ai-series-inputs, producing short per-metric findings, root-cause hypotheses, operator suggestions, and correlation JSON after deterministic Python analysis has already run.
 ---
 
 # Prometheus V2 Analysis Explanation
 
-Use only evidence from Python tool output. Do not invent values, thresholds, or root causes.
+Use only evidence from Python tool output. Do not invent values, thresholds, instances, labels, or root causes.
 
-## Per-Metric Comment
+## Per-Metric Range Sample Analysis
 
-For step 5, generate a short comment under 100 Chinese characters or under 100 English words.
+For Step 5, analyze the compact range sample payload produced by `/v2/build-ai-series-inputs`.
+
+The AI's job is supplemental:
+
+- Observe historical samples for patterns not covered by fixed rules.
+- Keep `python_severity` unchanged.
+- Return short structured findings for the report.
+- Do not replace Python deterministic analysis.
 
 Input evidence usually includes:
 
-- job
-- instance
-- metric id and name
-- severity
-- current value
-- min, max, average, p95
-- recent change ratio
-- slope per hour
-- burst flag
-- sustained growth flag
-- time to limit
+- `job`
+- `instance`
+- `metric_id`
+- `metric_name`
+- `series_labels`
+- `python_severity`
+- `python_reason`
+- `python_analysis`
+- `sample_policy`
+- `range_points`
 
-Comment style:
+Look for:
 
-```text
-过去24小时持续上升，当前未越线，但按趋势可能在12小时内接近阈值。
+- periodic fluctuation
+- long plateau followed by uplift
+- frequent oscillation
+- repeated near-threshold recovery
+- sampling gaps
+- outliers
+- current value clearly different from most historical samples
+
+Return JSON:
+
+```json
+{
+  "job": "redis",
+  "instance": "10.0.0.12:9121",
+  "metric_id": "redis_memory_usage",
+  "summary": "内存使用率持续处于高位，未看到明显回落。",
+  "extra_risks": [
+    "高位平台期持续时间较长"
+  ],
+  "suggestion": "建议检查 key 增长、过期策略和 maxmemory 配置。"
+}
 ```
 
-If evidence is insufficient:
+If there is no extra finding:
 
-```text
-样本不足，无法判断趋势，建议检查采集状态。
+```json
+{
+  "job": "redis",
+  "instance": "10.0.0.12:9121",
+  "metric_id": "redis_memory_usage",
+  "summary": "未发现固定规则之外的明显额外异常。",
+  "extra_risks": [],
+  "suggestion": "继续按当前巡检等级关注即可。"
+}
 ```
 
 ## Correlation Analysis
 
-For step 6, group risky metrics by `job` and `instance`.
+For Step 6, group risky metrics by `job` and `instance`.
 
 Prioritize these relationships:
 
@@ -50,9 +82,7 @@ Prioritize these relationships:
 
 Keep conclusions cautious. Use phrases such as `可能`, `建议优先检查`, and `需要结合日志确认`.
 
-## Output Contract
-
-Return structured text:
+Return JSON:
 
 ```json
 {
