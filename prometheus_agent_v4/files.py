@@ -42,9 +42,10 @@ class InspectionFiles:
             },
             "summary": {},
         }
+        plain_plan = plan_payload.get("plain")
         self.write_json(inspection_id, "meta.json", meta)
-        self.write_json(inspection_id, "plan.json", plan_payload.get("plan"))
-        self.write_json(inspection_id, "plain_plan.json", plan_payload.get("plain"))
+        self.write_json(inspection_id, "plan.json", plain_plan)
+        self.write_json(inspection_id, "plain_plan.json", plain_plan)
         return meta
 
     def base(self, inspection_id: str) -> Path:

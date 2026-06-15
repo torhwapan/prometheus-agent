@@ -10,9 +10,9 @@ from typing import Any, Callable, Dict, List, Mapping, Tuple
 
 from prometheus_agent_v2.analysis import analyze_query_results
 from prometheus_agent_v2.catalog import catalog_summary, load_catalog
+from prometheus_agent_v2.models import to_plain
 from prometheus_agent_v2.planner import plan_from_payload
-from prometheus_agent_v2.prometheus import PrometheusClient
-from prometheus_agent_v2.query import execute_task
+from prometheus_agent_v2.prometheus import PrometheusClient, PrometheusQueryError
 from prometheus_agent_v2.report import render_html, render_markdown
 
 from .compact import ai_batch_item, compact_task_result, compact_to_analysis_result
@@ -33,6 +33,9 @@ class PrometheusAgentV4App:
             ("POST", "/v4/query-and-compact"): self.query_and_compact,
             ("POST", "/v4/analyze"): self.analyze,
             ("POST", "/v4/build-ai-batches"): self.build_ai_batches,
+            ("POST", "/v4/list-ai-batches"): self.list_ai_batches,
+            ("POST", "/v4/get-ai-batch"): self.get_ai_batch,
+            ("POST", "/v4/next-ai-batch"): self.next_ai_batch,
             ("POST", "/v4/merge-ai-batch-findings"): self.merge_ai_batch_findings,
             ("POST", "/v4/build-final-correlation-input"): self.build_final_correlation_input,
             ("POST", "/v4/merge-final-correlation"): self.merge_final_correlation,
@@ -103,7 +106,7 @@ class PrometheusAgentV4App:
         }
         for task in plan["tasks"]:
             summary["task_count"] += 1
-            result = execute_task(client, task)
+            result = _execute_plain_task(client, task)
             if not result.get("ok"):
                 summary["failed_count"] += 1
             raw_path = self._write_raw_result(inspection_id, result)
@@ -165,10 +168,75 @@ class PrometheusAgentV4App:
             path = self.files.write_json(inspection_id, f"ai_input/{batch_id}.json", batch)
             batches.append({"batch_id": batch_id, "job": job, "instance": instance, "item_count": len(items), "path": str(path)})
         meta = self.files.meta(inspection_id) or {}
+        batch_records = self._ai_batch_records(inspection_id, include_content=False)
         meta.setdefault("summary", {})["ai_batches"] = {"batch_count": len(batches), "batches": batches}
+        meta["summary"]["ai_batch_progress"] = self._ai_batch_progress(inspection_id, batch_records)
         meta["status"] = "ai_batches_built"
         self.files.write_json(inspection_id, "meta.json", meta)
-        return 200, {"ok": True, "inspection_id": inspection_id, "status": "ai_batches_built", "batches": batches}
+        return 200, {
+            "ok": True,
+            "inspection_id": inspection_id,
+            "status": "ai_batches_built",
+            "batches": batches,
+            "batch_progress": meta["summary"]["ai_batch_progress"],
+        }
+
+    def list_ai_batches(self, payload: Mapping[str, Any]) -> HandlerResult:
+        inspection_id, error = self._inspection_id(payload)
+        if error:
+            return error
+        batches = self._ai_batch_records(inspection_id, include_content=bool(payload.get("include_content", False)))
+        progress = self._ai_batch_progress(inspection_id, batches)
+        return 200, {
+            "ok": True,
+            "inspection_id": inspection_id,
+            "batches": batches,
+            "batch_progress": progress,
+        }
+
+    def get_ai_batch(self, payload: Mapping[str, Any]) -> HandlerResult:
+        inspection_id, error = self._inspection_id(payload)
+        if error:
+            return error
+        batch_id = str(payload.get("batch_id") or "")
+        if not batch_id:
+            return 400, {"ok": False, "error": "batch_id_required"}
+        path = self.files.base(inspection_id) / "ai_input" / f"{safe_part(batch_id)}.json"
+        if not path.exists():
+            return 404, {"ok": False, "error": "batch_not_found", "inspection_id": inspection_id, "batch_id": batch_id}
+        batch = _read_json_if_exists(path)
+        output_path = self.files.base(inspection_id) / "ai_output" / f"{safe_part(batch_id)}.json"
+        return 200, {
+            "ok": True,
+            "inspection_id": inspection_id,
+            "batch_id": batch_id,
+            "completed": output_path.exists(),
+            "batch": batch,
+        }
+
+    def next_ai_batch(self, payload: Mapping[str, Any]) -> HandlerResult:
+        inspection_id, error = self._inspection_id(payload)
+        if error:
+            return error
+        batches = self._ai_batch_records(inspection_id, include_content=False)
+        progress = self._ai_batch_progress(inspection_id, batches)
+        for batch in batches:
+            if not batch["completed"]:
+                batch_payload = self.files.read_json(inspection_id, f"ai_input/{safe_part(batch['batch_id'])}.json")
+                return 200, {
+                    "ok": True,
+                    "inspection_id": inspection_id,
+                    "done": False,
+                    "batch_progress": progress,
+                    "batch": batch_payload,
+                }
+        return 200, {
+            "ok": True,
+            "inspection_id": inspection_id,
+            "done": True,
+            "batch_progress": progress,
+            "batch": None,
+        }
 
     def merge_ai_batch_findings(self, payload: Mapping[str, Any]) -> HandlerResult:
         inspection_id, error = self._inspection_id(payload)
@@ -181,14 +249,27 @@ class PrometheusAgentV4App:
             return 400, {"ok": False, "error": "batch_id_required"}
         if finding is None and findings is None:
             return 400, {"ok": False, "error": "finding_or_findings_required"}
+        input_path = self.files.base(inspection_id) / "ai_input" / f"{safe_part(batch_id)}.json"
+        if not input_path.exists():
+            return 404, {"ok": False, "error": "batch_not_found", "inspection_id": inspection_id, "batch_id": batch_id}
         output = {"batch_id": batch_id, "finding": finding, "findings": findings}
         path = self.files.write_json(inspection_id, f"ai_output/{safe_part(batch_id)}.json", output)
         meta = self.files.meta(inspection_id) or {}
-        ai_outputs = meta.setdefault("summary", {}).setdefault("ai_outputs", [])
-        ai_outputs.append({"batch_id": batch_id, "path": str(path)})
+        summary = meta.setdefault("summary", {})
+        ai_outputs = summary.setdefault("ai_outputs", [])
+        if not any(item.get("batch_id") == batch_id for item in ai_outputs if isinstance(item, Mapping)):
+            ai_outputs.append({"batch_id": batch_id, "path": str(path)})
+        batches = self._ai_batch_records(inspection_id, include_content=False)
+        summary["ai_batch_progress"] = self._ai_batch_progress(inspection_id, batches)
         meta["status"] = "ai_batch_findings_merged"
         self.files.write_json(inspection_id, "meta.json", meta)
-        return 200, {"ok": True, "inspection_id": inspection_id, "status": "ai_batch_findings_merged", "path": str(path)}
+        return 200, {
+            "ok": True,
+            "inspection_id": inspection_id,
+            "status": "ai_batch_findings_merged",
+            "path": str(path),
+            "batch_progress": summary["ai_batch_progress"],
+        }
 
     def build_final_correlation_input(self, payload: Mapping[str, Any]) -> HandlerResult:
         inspection_id, error = self._inspection_id(payload)
@@ -304,6 +385,51 @@ class PrometheusAgentV4App:
                 outputs.append(json.load(handle))
         return outputs
 
+    def _ai_batch_records(self, inspection_id: str, include_content: bool = False) -> List[Dict[str, Any]]:
+        input_root = self.files.base(inspection_id) / "ai_input"
+        output_root = self.files.base(inspection_id) / "ai_output"
+        batches = []
+        for path in sorted(input_root.glob("*.json")):
+            if path.name == "final_correlation.json":
+                continue
+            batch = _read_json_if_exists(path) or {}
+            batch_id = str(batch.get("batch_id") or path.stem)
+            output_path = output_root / f"{safe_part(batch_id)}.json"
+            record = {
+                "batch_id": batch_id,
+                "job": batch.get("job"),
+                "instance": batch.get("instance"),
+                "item_count": batch.get("item_count"),
+                "path": str(path),
+                "completed": output_path.exists(),
+                "output_path": str(output_path) if output_path.exists() else None,
+            }
+            if include_content:
+                record["batch"] = batch
+            batches.append(record)
+        return batches
+
+    def _completed_ai_batch_ids(self, inspection_id: str) -> set[str]:
+        output_root = self.files.base(inspection_id) / "ai_output"
+        completed = set()
+        for path in output_root.glob("*.json"):
+            if path.name == "final_correlation.json":
+                continue
+            payload = _read_json_if_exists(path) or {}
+            completed.add(str(payload.get("batch_id") or path.stem))
+        return completed
+
+    def _ai_batch_progress(self, inspection_id: str, batches: List[Mapping[str, Any]] | None = None) -> Dict[str, Any]:
+        records = batches if batches is not None else self._ai_batch_records(inspection_id, include_content=False)
+        total = len(records)
+        completed = sum(1 for item in records if item.get("completed"))
+        return {
+            "total": total,
+            "completed": completed,
+            "remaining": max(total - completed, 0),
+            "done": completed >= total,
+        }
+
 
 def create_app(data_dir: str | None = None) -> PrometheusAgentV4App:
     files = InspectionFiles(data_dir) if data_dir else None
@@ -390,6 +516,45 @@ def _analysis_key(item: Mapping[str, Any]) -> Tuple[str, str, str]:
         str(item.get("instance") or ""),
         str(item.get("metric_id") or ""),
     )
+
+
+def _execute_plain_task(client: PrometheusClient, task: Mapping[str, Any]) -> Dict[str, Any]:
+    record = {
+        "task": dict(task),
+        "ok": True,
+        "current": [],
+        "range": [],
+        "errors": [],
+    }
+    try:
+        record["current"] = [
+            {
+                "labels": item["labels"],
+                "points": [to_plain(point) for point in item["points"]],
+            }
+            for item in client.query(str(task.get("current_promql") or ""), time=task.get("end"))
+        ]
+    except PrometheusQueryError as exc:
+        record["ok"] = False
+        record["errors"].append({"stage": "current", "message": str(exc)})
+
+    try:
+        record["range"] = [
+            {
+                "labels": item["labels"],
+                "points": [to_plain(point) for point in item["points"]],
+            }
+            for item in client.query_range(
+                str(task.get("range_promql") or ""),
+                start=str(task.get("start") or ""),
+                end=str(task.get("end") or ""),
+                step_seconds=int(task.get("step_seconds") or 60),
+            )
+        ]
+    except (PrometheusQueryError, TypeError, ValueError) as exc:
+        record["ok"] = False
+        record["errors"].append({"stage": "range", "message": str(exc)})
+    return record
 
 
 def _read_json_if_exists(path: Path) -> Any:

@@ -89,6 +89,7 @@ data_v4/inspections/{inspection_id}/
   -> POST /v4/query-and-compact 查询 Prometheus，写 raw 和 compact 文件
   -> POST /v4/analyze 读取 compact 文件做 Python 分析
   -> POST /v4/build-ai-batches 按 job+instance 生成 AI batch 文件
+  -> 平台通过 POST /v4/next-ai-batch 或 POST /v4/get-ai-batch 获取 batch 内容
   -> 平台逐个 batch 调用 AI，使用 prompts_v4/batch_analysis.md
   -> POST /v4/merge-ai-batch-findings 保存每个 batch 的 AI 输出
   -> POST /v4/build-final-correlation-input 生成最终关联分析输入
@@ -232,13 +233,153 @@ POST /v4/build-ai-batches
       "item_count": 4,
       "path": "data_v4/inspections/uuid/ai_input/redis__10.0.0.12_9121.json"
     }
-  ]
+  ],
+  "batch_progress": {
+    "total": 1,
+    "completed": 0,
+    "remaining": 1,
+    "done": false
+  }
 }
 ```
 
-平台读取每个 `path` 对应的 JSON，调用 AI。
+`path` 是服务端本地文件路径，主要用于排查和审计。平台不需要直接读取该文件，而是通过下面的 HTTP 接口获取 batch 内容。
 
-### 4.5 合并批次 AI 输出
+### 4.5 查询 AI 批次列表
+
+```text
+POST /v4/list-ai-batches
+```
+
+请求：
+
+```json
+{
+  "inspection_id": "uuid",
+  "include_content": false
+}
+```
+
+响应：
+
+```json
+{
+  "ok": true,
+  "inspection_id": "uuid",
+  "batches": [
+    {
+      "batch_id": "redis__10.0.0.12_9121",
+      "job": "redis",
+      "instance": "10.0.0.12:9121",
+      "item_count": 4,
+      "path": "data_v4/inspections/uuid/ai_input/redis__10.0.0.12_9121.json",
+      "completed": false,
+      "output_path": null
+    }
+  ],
+  "batch_progress": {
+    "total": 1,
+    "completed": 0,
+    "remaining": 1,
+    "done": false
+  }
+}
+```
+
+如果平台想一次拿到所有 batch 内容，可以传 `"include_content": true`。如果 batch 很多，推荐不要这样做，改用下一个接口逐个拉取。
+
+### 4.6 获取指定 AI 批次
+
+```text
+POST /v4/get-ai-batch
+```
+
+请求：
+
+```json
+{
+  "inspection_id": "uuid",
+  "batch_id": "redis__10.0.0.12_9121"
+}
+```
+
+响应：
+
+```json
+{
+  "ok": true,
+  "inspection_id": "uuid",
+  "batch_id": "redis__10.0.0.12_9121",
+  "completed": false,
+  "batch": {
+    "inspection_id": "uuid",
+    "batch_id": "redis__10.0.0.12_9121",
+    "job": "redis",
+    "instance": "10.0.0.12:9121",
+    "item_count": 4,
+    "items": []
+  }
+}
+```
+
+平台把 `batch` 字段作为 AI 输入，配合 `prompts_v4/batch_analysis.md` 调用大模型。
+
+### 4.7 获取下一个未分析 AI 批次
+
+```text
+POST /v4/next-ai-batch
+```
+
+请求：
+
+```json
+{
+  "inspection_id": "uuid"
+}
+```
+
+响应：
+
+```json
+{
+  "ok": true,
+  "inspection_id": "uuid",
+  "done": false,
+  "batch_progress": {
+    "total": 3,
+    "completed": 1,
+    "remaining": 2,
+    "done": false
+  },
+  "batch": {
+    "batch_id": "redis__10.0.0.12_9121",
+    "job": "redis",
+    "instance": "10.0.0.12:9121",
+    "items": []
+  }
+}
+```
+
+当所有 batch 都已经通过 `/v4/merge-ai-batch-findings` 保存 AI 结果后，响应会变成：
+
+```json
+{
+  "ok": true,
+  "inspection_id": "uuid",
+  "done": true,
+  "batch_progress": {
+    "total": 3,
+    "completed": 3,
+    "remaining": 0,
+    "done": true
+  },
+  "batch": null
+}
+```
+
+这是平台循环编排最推荐使用的接口。平台每次取一个未完成 batch，调用 AI，保存 AI 结果，然后继续取下一个，直到 `done=true`。
+
+### 4.8 合并批次 AI 输出
 
 ```text
 POST /v4/merge-ai-batch-findings
@@ -264,7 +405,24 @@ POST /v4/merge-ai-batch-findings
 }
 ```
 
-### 4.6 构建最终关联分析输入
+响应：
+
+```json
+{
+  "ok": true,
+  "inspection_id": "uuid",
+  "status": "ai_batch_findings_merged",
+  "path": "data_v4/inspections/uuid/ai_output/redis__10.0.0.12_9121.json",
+  "batch_progress": {
+    "total": 3,
+    "completed": 2,
+    "remaining": 1,
+    "done": false
+  }
+}
+```
+
+### 4.9 构建最终关联分析输入
 
 ```text
 POST /v4/build-final-correlation-input
@@ -284,7 +442,7 @@ POST /v4/build-final-correlation-input
 ai_input/final_correlation.json
 ```
 
-### 4.7 合并最终关联分析
+### 4.10 合并最终关联分析
 
 ```text
 POST /v4/merge-final-correlation
@@ -302,7 +460,7 @@ POST /v4/merge-final-correlation
 }
 ```
 
-### 4.8 生成报告
+### 4.11 生成报告
 
 ```text
 POST /v4/report
@@ -637,11 +795,82 @@ analysis/redis/10.0.0.12_9121/redis_memory_usage.json
       "item_count": 4,
       "path": "data_v4/inspections/ins-001/ai_input/redis__10.0.0.12_9121.json"
     }
-  ]
+  ],
+  "batch_progress": {
+    "total": 1,
+    "completed": 0,
+    "remaining": 1,
+    "done": false
+  }
 }
 ```
 
-AI batch 文件示例：
+`path` 是 Python 服务本地文件路径，平台不直接读取它。平台可以先查询批次列表，确认总数和完成进度：
+
+```json
+{
+  "inspection_id": "ins-001",
+  "include_content": false
+}
+```
+
+调用 `POST /v4/list-ai-batches` 的响应：
+
+```json
+{
+  "ok": true,
+  "inspection_id": "ins-001",
+  "batches": [
+    {
+      "batch_id": "redis__10.0.0.12_9121",
+      "job": "redis",
+      "instance": "10.0.0.12:9121",
+      "item_count": 4,
+      "completed": false
+    }
+  ],
+  "batch_progress": {
+    "total": 1,
+    "completed": 0,
+    "remaining": 1,
+    "done": false
+  }
+}
+```
+
+然后平台通过 `POST /v4/next-ai-batch` 获取下一个未完成批次：
+
+```json
+{
+  "inspection_id": "ins-001"
+}
+```
+
+响应中的 `batch` 就是要传给 AI 的输入：
+
+```json
+{
+  "ok": true,
+  "inspection_id": "ins-001",
+  "done": false,
+  "batch_progress": {
+    "total": 1,
+    "completed": 0,
+    "remaining": 1,
+    "done": false
+  },
+  "batch": {
+    "inspection_id": "ins-001",
+    "batch_id": "redis__10.0.0.12_9121",
+    "job": "redis",
+    "instance": "10.0.0.12:9121",
+    "item_count": 4,
+    "items": []
+  }
+}
+```
+
+AI batch 内容示例：
 
 ```json
 {
@@ -674,7 +903,7 @@ AI batch 文件示例：
 }
 ```
 
-平台读取 `path` 对应文件，把整个 batch 交给 AI，使用：
+平台把 `/v4/next-ai-batch` 或 `/v4/get-ai-batch` 返回的 `batch` 字段交给 AI，使用：
 
 ```text
 prompts_v4/batch_analysis.md
@@ -685,7 +914,7 @@ prompts_v4/batch_analysis.md
 调用方：公司平台  
 被调用方：AI + `prompts_v4/batch_analysis.md`
 
-输入：`ai_input/redis__10.0.0.12_9121.json`
+输入：`/v4/next-ai-batch` 或 `/v4/get-ai-batch` 返回的 `batch` JSON。
 
 AI 输出：
 
@@ -741,7 +970,13 @@ AI 输出：
   "ok": true,
   "inspection_id": "ins-001",
   "status": "ai_batch_findings_merged",
-  "path": "data_v4/inspections/ins-001/ai_output/redis__10.0.0.12_9121.json"
+  "path": "data_v4/inspections/ins-001/ai_output/redis__10.0.0.12_9121.json",
+  "batch_progress": {
+    "total": 1,
+    "completed": 1,
+    "remaining": 0,
+    "done": true
+  }
 }
 ```
 
@@ -903,9 +1138,15 @@ batch_payload = http_post("/v4/build-ai-batches", {
     "risky_only": false
 })
 
-for batch in batch_payload["batches"]:
-    ai_input = read_file(batch["path"])
-    finding = call_llm(prompt_file="prompts_v4/batch_analysis.md", input=ai_input)
+while True:
+    next_batch = http_post("/v4/next-ai-batch", {
+        "inspection_id": inspection_id
+    })
+    if next_batch["done"]:
+        break
+
+    batch = next_batch["batch"]
+    finding = call_llm(prompt_file="prompts_v4/batch_analysis.md", input=batch)
     http_post("/v4/merge-ai-batch-findings", {
         "inspection_id": inspection_id,
         "batch_id": batch["batch_id"],
