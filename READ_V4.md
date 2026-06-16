@@ -79,6 +79,7 @@ data_v4/inspections/{inspection_id}/
 - `ai_input/` 保存发给 AI 的 job+instance 批次输入。
 - `ai_output/` 保存 AI 返回结果。
 - `report/` 保存最终报告。
+- HTML 报告会优先展示领导汇报视角的总览、重点风险和关联分析，明细按 job / instance 展开。
 
 ## 3. 推荐调用链路
 

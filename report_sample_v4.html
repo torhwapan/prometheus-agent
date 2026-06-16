@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prometheus 巡检报告</title>
+  <style>
+    :root {
+      --bg: #eef4f8;
+      --bg-accent: #f8fbfd;
+      --surface: #ffffff;
+      --surface-alt: #f4f8fb;
+      --text: #17324d;
+      --muted: #5f7488;
+      --line: #d6e2ec;
+      --shadow: 0 18px 48px rgba(19, 50, 77, 0.08);
+      --critical: #b42318;
+      --critical-bg: #fde7e4;
+      --warning: #c46b00;
+      --warning-bg: #fff1db;
+      --info: #0b5cad;
+      --info-bg: #deecff;
+      --ok: #0f7b52;
+      --ok-bg: #dcf5e8;
+      --unknown: #667085;
+      --unknown-bg: #edf0f3;
+      --hero-start: #163b63;
+      --hero-end: #1e6f8b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(30, 111, 139, 0.18), transparent 22%),
+        linear-gradient(180deg, #f7fbfe 0%, var(--bg) 100%);
+    }
+    .page { max-width: 1360px; margin: 0 auto; padding: 28px 24px 56px; }
+    .hero {
+      padding: 30px 32px;
+      border-radius: 22px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--hero-start), var(--hero-end));
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -40px -55px auto;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .eyebrow {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 13px;
+    }
+    h1 { margin: 16px 0 10px; font-size: 34px; line-height: 1.15; }
+    .hero p { margin: 0; max-width: 900px; color: rgba(255, 255, 255, 0.88); line-height: 1.7; }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 22px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid rgba(214, 226, 236, 0.85);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+    .metric-card {
+      min-height: 132px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(248,251,253,0.95) 100%);
+    }
+    .metric-card .label { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+    .metric-card .value { font-size: 34px; font-weight: 700; line-height: 1; }
+    .metric-card .sub { margin-top: 10px; color: var(--muted); font-size: 13px; }
+    .section {
+      margin-top: 22px;
+      padding: 22px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid rgba(214, 226, 236, 0.85);
+      box-shadow: var(--shadow);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .section-head h2 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+    .section-head p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .critical { color: var(--critical); background: var(--critical-bg); }
+    .warning { color: var(--warning); background: var(--warning-bg); }
+    .info { color: var(--info); background: var(--info-bg); }
+    .ok { color: var(--ok); background: var(--ok-bg); }
+    .unknown { color: var(--unknown); background: var(--unknown-bg); }
+    .summary-layout {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 18px;
+    }
+    .summary-box {
+      background: var(--surface-alt);
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      padding: 18px;
+    }
+    .summary-box h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+    .summary-box p, .summary-box li {
+      color: var(--text);
+      line-height: 1.7;
+    }
+    .summary-box ul, .summary-box ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .count-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .count-item {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .count-item strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 22px;
+      line-height: 1;
+    }
+    .risk-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+    }
+    .risk-table thead th {
+      background: #eaf2f8;
+      color: #30506f;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .risk-table th, .risk-table td {
+      padding: 14px 14px;
+      vertical-align: top;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+    .risk-table tr:last-child td { border-bottom: none; }
+    .metric-name {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .metric-id {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .chip {
+      display: inline-flex;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #eef4f8;
+      color: #33536f;
+      font-size: 12px;
+    }
+    .callout {
+      padding: 16px 18px;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(30, 111, 139, 0.09), rgba(22, 59, 99, 0.03));
+      border: 1px solid rgba(30, 111, 139, 0.18);
+    }
+    .callout p:last-child { margin-bottom: 0; }
+    .correlation-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .correlation-card {
+      padding: 18px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: var(--surface-alt);
+    }
+    .correlation-card h3 {
+      margin: 10px 0 10px;
+      font-size: 17px;
+      line-height: 1.4;
+    }
+    .correlation-card p {
+      margin: 0 0 8px;
+      line-height: 1.7;
+    }
+    .instance-section {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface-alt);
+      margin-top: 14px;
+      overflow: hidden;
+    }
+    .instance-section summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 16px 18px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.75);
+    }
+    .instance-section summary::-webkit-details-marker { display: none; }
+    .instance-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .instance-meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .instance-body {
+      padding: 0 18px 18px;
+    }
+    .detail-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+    .detail-table th, .detail-table td {
+      padding: 12px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    .detail-table th {
+      background: #eef5fa;
+      font-size: 12px;
+      color: #35536f;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .detail-table tr:last-child td { border-bottom: none; }
+    .progress {
+      width: 120px;
+      height: 8px;
+      border-radius: 999px;
+      background: #e6edf3;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #3b82f6, #1f8b7b);
+    }
+    .text-block p {
+      margin: 0 0 8px;
+      line-height: 1.7;
+    }
+    .text-block ul, .text-block ol {
+      margin: 0 0 8px;
+      padding-left: 20px;
+      line-height: 1.7;
+    }
+    .text-block code {
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: rgba(19, 50, 77, 0.08);
+      font-family: Consolas, monospace;
+      font-size: 0.92em;
+    }
+    .empty {
+      padding: 18px;
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      color: var(--muted);
+      background: #fbfdff;
+      line-height: 1.7;
+    }
+    @media (max-width: 1100px) {
+      .grid, .summary-layout, .correlation-list { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 860px) {
+      .page { padding: 18px 14px 36px; }
+      .hero { padding: 24px 20px; border-radius: 18px; }
+      h1 { font-size: 28px; }
+      .grid, .summary-layout, .correlation-list { grid-template-columns: 1fr; }
+      .risk-table, .detail-table { display: block; overflow-x: auto; }
+      .section { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="eyebrow">Prometheus Inspection Report</div>
+      <h1>Prometheus 巡检报告</h1>
+      <p>本次巡检共检查 6 项指标，其中 4 项需要关注。整体风险等级为预警。????????? 10.22.23.24 ??? Redis ? JVM ????Redis ???????????????????????????????????????? JVM ????????????????????????????????? Redis ?????????? Java ???????</p>
+      <div class="hero-meta">
+        <span class="hero-tag">Prometheus: http://10.22.23.24:9090</span>
+        <span class="hero-tag">巡检范围: 全部 Job / 全部 Instance</span>
+        <span class="hero-tag">时间窗口: 2026-06-15 08:00 - 2026-06-16 08:00</span>
+        <span class="hero-tag">生成时间: 2026-06-16 22:57:47</span>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card metric-card">
+        <div class="label">总体风险等级</div>
+        <div class="value">预警</div>
+        <div class="sub"><span class="badge warning">预警</span></div>
+      </div>
+      <div class="card metric-card">
+        <div class="label">重点关注指标</div>
+        <div class="value">4</div>
+        <div class="sub">总指标 6 项</div>
+      </div>
+      <div class="card metric-card">
+        <div class="label">巡检对象</div>
+        <div class="value">3</div>
+        <div class="sub">Job 数量 / 实例数 3</div>
+      </div>
+      <div class="card metric-card">
+        <div class="label">高优先风险</div>
+        <div class="value">4</div>
+        <div class="sub">高危 1 / 预警 3</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>执行摘要</h2>
+          <p>这一部分面向汇报场景，优先说明整体风险、重点指标和建议关注方向。</p>
+        </div>
+      </div>
+      <div class="summary-layout">
+        <div class="summary-box text-block"><p>????????? 10.22.23.24 ??? Redis ? JVM ????Redis ???????????????????????????????????????? JVM ????????????????????????????????? Redis ?????????? Java ???????</p></div>
+        <div class="summary-box">
+          <h3>风险统计</h3>
+          <div class="count-list">
+            <div class="count-item"><strong>1</strong><span>高危</span> <span class="badge critical">高危</span></div>
+            <div class="count-item"><strong>3</strong><span>预警</span> <span class="badge warning">预警</span></div>
+            <div class="count-item"><strong>1</strong><span>关注</span> <span class="badge info">关注</span></div>
+            <div class="count-item"><strong>6</strong><span>正常</span> <span class="badge ok">正常</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>重点风险指标</h2>
+          <p>仅展示非正常指标，适合领导快速定位需要关注的系统和实例。</p>
+        </div>
+      </div>
+      <table class="risk-table"><thead><tr><th>等级</th><th>指标</th><th>对象</th><th>当前值</th><th>规则判断</th><th>AI 补充</th><th>建议动作</th></tr></thead><tbody><tr><td><span class="badge critical">高危</span></td><td><div class='metric-name'>Redis Evicted Keys Rate</div><div class='metric-id'>redis_evicted_keys_rate</div><div class='chips'><span class="chip">存在突增</span><span class="chip">0.0h 可能触顶</span><span class="chip">阈值告警线 1.000/s</span></div></td><td><div>redis</div><div class='muted'>10.22.23.24:9121</div></td><td>12.80/s<div class="progress"><span style="width:100%"></span></div></td><td class='text-block'><p>Current value is already critical. Recent samples show a burst.</p></td><td class='text-block'><p>????????????????????????????</p></td><td class='text-block'><p>?????????? key???????????????</p></td></tr><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>Redis Memory Usage</div><div class='metric-id'>redis_memory_usage</div><div class='chips'><span class="chip">持续增长</span><span class="chip">20.0h 可能触顶</span><span class="chip">阈值告警线 75.00%</span></div></td><td><div>redis</div><div class='muted'>10.22.23.24:9121</div></td><td>82.40%<div class="progress"><span style="width:82%"></span></div></td><td class='text-block'><p>Current value is already warning. Series is continuously growing without clear slowdown. Estimated time to limit is 20.0h.</p></td><td class='text-block'><p>?????????????????? 20 ??????</p></td><td class='text-block'><p>?? key ????????? maxmemory ???</p></td></tr><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>JVM Heap Usage</div><div class='metric-id'>jvm_heap_usage</div><div class='chips'><span class="chip">持续增长</span><span class="chip">16.8h 可能触顶</span><span class="chip">阈值告警线 75.00%</span></div></td><td><div>jvm</div><div class='muted'>10.22.23.24:8080</div></td><td>71.30%<div class="progress"><span style="width:71%"></span></div></td><td class='text-block'><p>24h forecast may reach warning. Series is continuously growing without clear slowdown.</p></td><td class='text-block'><p>???????????????????????????</p></td><td class='text-block'><p>?? Full GC ????????????????</p></td></tr><tr><td><span class="badge info">关注</span></td><td><div class='metric-name'>Redis Connected Clients</div><div class='metric-id'>redis_connected_clients</div><div class='chips'><span class="chip">持续增长</span><span class="chip">19.0h 可能触顶</span><span class="chip">阈值告警线 800.0</span></div></td><td><div>redis</div><div class='muted'>10.22.23.24:9121</div></td><td>762.0<div class="progress"><span style="width:76%"></span></div></td><td class='text-block'><p>Series is continuously growing without clear slowdown.</p></td><td class='text-block'><p>? Redis ??????????????????????????????????</p></td><td class='text-block'><p>建议保持关注，继续观察后续趋势变化。</p></td></tr></tbody></table>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>关联分析</h2>
+          <p>汇总多个指标之间的关联现象，帮助解释为什么当前实例需要优先关注。</p>
+        </div>
+      </div>
+      <div class="callout text-block"><p>????????? 10.22.23.24 ??? Redis ? JVM ????Redis ???????????????????????????????????????? JVM ????????????????????????????????? Redis ?????????? Java ???????</p></div>
+      <div class="correlation-list"><div class="correlation-card"><span class="badge critical">高危</span><h3>redis</h3><p><strong>涉及实例：</strong>10.22.23.24:9121</p><div class='text-block'><p>Redis ???????????????????????????????????</p></div><div class='text-block'><p>????? key??????key ????? maxmemory ??????????????</p></div></div><div class="correlation-card"><span class="badge warning">预警</span><h3>jvm, redis</h3><p><strong>涉及实例：</strong>10.22.23.24:8080, 10.22.23.24:9121</p><div class='text-block'><p>Redis ? JVM ?????????????????????????????</p></div><div class='text-block'><p>???? QPS??????? GC ?????????????????????????</p></div></div></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>分组明细</h2>
+          <p>按照 job 和 instance 逐层展开。重点风险默认展开，正常项收拢，兼顾汇报和排查。</p>
+        </div>
+      </div>
+      <div style="margin-bottom:20px;"><div class="section-head" style="margin-bottom:10px;"><div><h2 style="font-size:18px;">redis</h2><p>共 1 个实例，巡检 3 项指标，需关注 3 项。</p></div></div><details class="instance-section" open><summary><div><div class="instance-title">10.22.23.24:9121</div><div class="instance-meta">3 项指标，需关注 3 项</div></div><div><span class="badge critical">高危</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势 / 阈值</th><th>规则分析</th><th>AI 补充</th></tr></thead><tbody><tr><td><span class="badge critical">高危</span></td><td><div class='metric-name'>Redis Evicted Keys Rate</div><div class='metric-id'>redis_evicted_keys_rate</div></td><td>12.80/s</td><td><div class='muted'>当前 12.80/s，24h 预测 27.20/s，每小时变化 0.600/s</div><div class="progress"><span style="width:100%"></span></div><div class='chips'><span class="chip">存在突增</span><span class="chip">0.0h 可能触顶</span><span class="chip">阈值告警线 1.000/s</span></div></td><td class='text-block'><p>Current value is already critical. Recent samples show a burst.</p></td><td class='text-block'><p>????????????????????????????</p></td></tr><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>Redis Memory Usage</div><div class='metric-id'>redis_memory_usage</div></td><td>82.40%</td><td><div class='muted'>当前 82.40%，24h 预测 103.5%，每小时变化 0.880%</div><div class="progress"><span style="width:82%"></span></div><div class='chips'><span class="chip">持续增长</span><span class="chip">20.0h 可能触顶</span><span class="chip">阈值告警线 75.00%</span></div></td><td class='text-block'><p>Current value is already warning. Series is continuously growing without clear slowdown. Estimated time to limit is 20.0h.</p></td><td class='text-block'><p>?????????????????? 20 ??????</p></td></tr><tr><td><span class="badge info">关注</span></td><td><div class='metric-name'>Redis Connected Clients</div><div class='metric-id'>redis_connected_clients</div></td><td>762.0</td><td><div class='muted'>当前 762.0，24h 预测 1062.0，每小时变化 12.50</div><div class="progress"><span style="width:76%"></span></div><div class='chips'><span class="chip">持续增长</span><span class="chip">19.0h 可能触顶</span><span class="chip">阈值告警线 800.0</span></div></td><td class='text-block'><p>Series is continuously growing without clear slowdown.</p></td><td class='text-block'><p>? Redis ??????????????????????????????????</p></td></tr></tbody></table></div></details></div><div style="margin-bottom:20px;"><div class="section-head" style="margin-bottom:10px;"><div><h2 style="font-size:18px;">jvm</h2><p>共 1 个实例，巡检 1 项指标，需关注 1 项。</p></div></div><details class="instance-section" open><summary><div><div class="instance-title">10.22.23.24:8080</div><div class="instance-meta">1 项指标，需关注 1 项</div></div><div><span class="badge warning">预警</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势 / 阈值</th><th>规则分析</th><th>AI 补充</th></tr></thead><tbody><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>JVM Heap Usage</div><div class='metric-id'>jvm_heap_usage</div></td><td>71.30%</td><td><div class='muted'>当前 71.30%，24h 预测 76.58%，每小时变化 0.220%</div><div class="progress"><span style="width:71%"></span></div><div class='chips'><span class="chip">持续增长</span><span class="chip">16.8h 可能触顶</span><span class="chip">阈值告警线 75.00%</span></div></td><td class='text-block'><p>24h forecast may reach warning. Series is continuously growing without clear slowdown.</p></td><td class='text-block'><p>???????????????????????????</p></td></tr></tbody></table></div></details></div><div style="margin-bottom:20px;"><div class="section-head" style="margin-bottom:10px;"><div><h2 style="font-size:18px;">node</h2><p>共 1 个实例，巡检 2 项指标，需关注 0 项。</p></div></div><details class="instance-section"><summary><div><div class="instance-title">10.22.23.24:9100</div><div class="instance-meta">2 项指标，需关注 0 项</div></div><div><span class="badge ok">正常</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势 / 阈值</th><th>规则分析</th><th>AI 补充</th></tr></thead><tbody><tr><td><span class="badge ok">正常</span></td><td><div class='metric-name'>Memory Usage</div><div class='metric-id'>node_memory_usage</div></td><td>58.60%</td><td><div class='muted'>当前 58.60%，24h 预测 59.56%，每小时变化 0.040%</div><div class="progress"><span style="width:59%"></span></div><div class='chips'><span class="chip">阈值告警线 80.00%</span></div></td><td class='text-block'><p>No obvious threshold breach, burst, or sustained growth risk.</p></td><td class='text-block'><p>无</p></td></tr><tr><td><span class="badge ok">正常</span></td><td><div class='metric-name'>CPU Usage</div><div class='metric-id'>node_cpu_usage</div></td><td>43.20%</td><td><div class='muted'>当前 43.20%，24h 预测 43.92%，每小时变化 0.030%</div><div class="progress"><span style="width:43%"></span></div><div class='chips'><span class="chip">阈值告警线 75.00%</span></div></td><td class='text-block'><p>No obvious threshold breach, burst, or sustained growth risk.</p></td><td class='text-block'><p>无</p></td></tr></tbody></table></div></details></div>
+    </section>
+  </div>
+</body>
+</html>

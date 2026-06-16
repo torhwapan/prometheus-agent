@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Tuple
@@ -13,10 +14,10 @@ from prometheus_agent_v2.catalog import catalog_summary, load_catalog
 from prometheus_agent_v2.models import to_plain
 from prometheus_agent_v2.planner import plan_from_payload
 from prometheus_agent_v2.prometheus import PrometheusClient, PrometheusQueryError
-from prometheus_agent_v2.report import render_html, render_markdown
 
 from .compact import ai_batch_item, compact_task_result, compact_to_analysis_result
 from .files import DEFAULT_DATA_DIR, InspectionFiles, safe_part
+from .report import render_html_report
 
 
 HandlerResult = Tuple[int, Dict[str, Any]]
@@ -308,9 +309,18 @@ class PrometheusAgentV4App:
         analysis = self.files.read_json(inspection_id, "analysis/analysis.json")
         correlation_path = self.files.base(inspection_id) / "ai_output" / "final_correlation.json"
         ai_correlation = _read_json_if_exists(correlation_path)
+        ai_batch_outputs = self._read_ai_outputs(inspection_id)
         fmt = str(payload.get("format") or "html").lower()
-        content = render_markdown(analysis, ai_correlation=ai_correlation) if fmt in {"md", "markdown"} else render_html(analysis, ai_correlation=ai_correlation)
+        content = render_html_report(
+            analysis,
+            plan=self.files.read_json(inspection_id, "plan.json"),
+            meta=self.files.meta(inspection_id) or {},
+            ai_correlation=ai_correlation,
+            ai_batch_outputs=ai_batch_outputs,
+        )
         extension = "md" if fmt in {"md", "markdown"} else "html"
+        if extension == "md":
+            content = self._render_markdown_report(analysis, ai_correlation=ai_correlation)
         relative = f"report/report.{extension}"
         path = self.files.base(inspection_id) / relative
         path.write_text(content, encoding="utf-8")
@@ -384,6 +394,37 @@ class PrometheusAgentV4App:
             with path.open("r", encoding="utf-8") as handle:
                 outputs.append(json.load(handle))
         return outputs
+
+    def _render_markdown_report(self, analysis: Mapping[str, Any], ai_correlation: Mapping[str, Any] | None = None) -> str:
+        lines = [
+            "# Prometheus 巡检报告",
+            "",
+            f"- 生成时间: {self._now_local()}",
+            f"- 总体等级: {analysis.get('severity', 'unknown')}",
+            f"- 统计: {analysis.get('counts', {})}",
+            "",
+        ]
+        if ai_correlation:
+            lines.extend(["## AI 关联性分析", "", str(ai_correlation.get("summary", "")), ""])
+            for item in ai_correlation.get("correlations", []):
+                lines.append(
+                    f"- `{item.get('level')}` {item.get('jobs')} / {item.get('instances')}: {item.get('reason')}；建议：{item.get('suggestion')}"
+                )
+            lines.append("")
+        for item in analysis.get("items", []):
+            lines.extend([
+                f"## {item.get('job')}/{item.get('instance')}",
+                "",
+                f"- 指标: {item.get('metric_name') or item.get('metric_id')}",
+                f"- 等级: {item.get('severity')}",
+                f"- 规则: {item.get('reason')}",
+                f"- AI: {item.get('ai_comment') or ''}",
+                "",
+            ])
+        return "\n".join(lines)
+
+    def _now_local(self) -> str:
+        return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S")
 
     def _ai_batch_records(self, inspection_id: str, include_content: bool = False) -> List[Dict[str, Any]]:
         input_root = self.files.base(inspection_id) / "ai_input"
