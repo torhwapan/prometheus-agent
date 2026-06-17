@@ -35,6 +35,7 @@ class PrometheusAgentV4App:
             ("POST", "/v4/analyze"): self.analyze,
             ("POST", "/v4/build-ai-batches"): self.build_ai_batches,
             ("POST", "/v4/list-ai-batches"): self.list_ai_batches,
+            ("POST", "/v4/list-pending-ai-batches"): self.list_pending_ai_batches,
             ("POST", "/v4/get-ai-batch"): self.get_ai_batch,
             ("POST", "/v4/next-ai-batch"): self.next_ai_batch,
             ("POST", "/v4/merge-ai-batch-findings"): self.merge_ai_batch_findings,
@@ -192,6 +193,20 @@ class PrometheusAgentV4App:
             "ok": True,
             "inspection_id": inspection_id,
             "batches": batches,
+            "batch_progress": progress,
+        }
+
+    def list_pending_ai_batches(self, payload: Mapping[str, Any]) -> HandlerResult:
+        inspection_id, error = self._inspection_id(payload)
+        if error:
+            return error
+        batches = self._ai_batch_records(inspection_id, include_content=False)
+        pending_ids = [str(batch.get("batch_id") or "") for batch in batches if not batch.get("completed")]
+        progress = self._ai_batch_progress(inspection_id, batches)
+        return 200, {
+            "ok": True,
+            "inspection_id": inspection_id,
+            "batch_ids": pending_ids,
             "batch_progress": progress,
         }
 

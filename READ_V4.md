@@ -99,9 +99,102 @@ data_v4/inspections/{inspection_id}/
   -> POST /v4/report 生成报告
 ```
 
-## 4. 关键接口
+## 4. 如何盘点真实指标
 
-### 4.1 创建巡检
+在调整 `prometheus_agent_v2/catalog.py` 之前，建议先通过 Prometheus 官方 HTTP API 盘点你们环境里真实存在的 job 和指标名。
+
+### 4.1 查询有哪些 job
+
+```text
+GET /api/v1/label/job/values
+```
+
+示例：
+
+```text
+http://YOUR_PROMETHEUS:9090/api/v1/label/job/values
+```
+
+这个接口会返回当前 Prometheus 中出现过的全部 `job` 值，例如：
+
+```json
+[
+  "java_jmx",
+  "node_exporer",
+  "rabbitmq_exporter",
+  "redis_exporter"
+]
+```
+
+### 4.2 查询全量指标名
+
+```text
+GET /api/v1/label/__name__/values
+```
+
+示例：
+
+```text
+http://YOUR_PROMETHEUS:9090/api/v1/label/__name__/values
+```
+
+这个接口会返回 Prometheus 当前保存过的所有指标名。
+如果只是想看某一个 job，单独用这个接口不够，需要配合下一种方法。
+
+### 4.3 查询某个 job 下有哪些真实指标
+
+最实用的是查询某个 job 的全部 time series，再从返回结果里提取 `__name__` 去重：
+
+```text
+GET /api/v1/series?match[]={job="java_jmx"}
+GET /api/v1/series?match[]={job="node_exporer"}
+GET /api/v1/series?match[]={job="rabbitmq_exporter"}
+GET /api/v1/series?match[]={job="redis_exporter"}
+```
+
+完整示例：
+
+```text
+http://YOUR_PROMETHEUS:9090/api/v1/series?match[]={job="redis_exporter"}
+```
+
+返回结果里的每一条 series 都会包含：
+
+```json
+{
+  "__name__": "redis_memory_used_bytes",
+  "instance": "10.22.23.24:9121",
+  "job": "redis_exporter"
+}
+```
+
+把这些 series 里的 `__name__` 去重后，就能得到该 job 实际暴露的指标名列表。
+
+### 4.4 按时间范围查询某个 job 的真实指标
+
+如果不加时间范围，`/api/v1/series` 可能会把历史残留 series 也带出来。
+更稳妥的写法是加上 `start` 和 `end`：
+
+```text
+GET /api/v1/series?match[]={job="redis_exporter"}&start=2026-06-17T00:00:00Z&end=2026-06-17T23:59:59Z
+```
+
+示例：
+
+```text
+http://YOUR_PROMETHEUS:9090/api/v1/series?match[]={job="redis_exporter"}&start=2026-06-17T00:00:00Z&end=2026-06-17T23:59:59Z
+```
+
+推荐做法：
+
+1. 先调用 `/api/v1/label/job/values`，确认有哪些 job。
+2. 再对每个 job 调 `/api/v1/series?match[]={job="..."}`。
+3. 把返回结果中的 `__name__` 去重。
+4. 根据真实指标名，再调整 `prometheus_agent_v2/catalog.py` 里的 PromQL 和指标清单。
+
+## 5. 关键接口
+
+### 5.1 创建巡检
 
 ```text
 POST /v4/inspections
@@ -135,7 +228,7 @@ POST /v4/inspections
 }
 ```
 
-### 4.2 查询并压缩
+### 5.2 查询并压缩
 
 ```text
 POST /v4/query-and-compact
@@ -175,7 +268,7 @@ POST /v4/query-and-compact
 - 把摘要和抽样点写入 `compact/`。
 - 不在内存中保留所有 raw points。
 
-### 4.3 Python 分析
+### 5.3 Python 分析
 
 ```text
 POST /v4/analyze
@@ -204,7 +297,7 @@ POST /v4/analyze
 }
 ```
 
-### 4.4 构建 AI 批次
+### 5.4 构建 AI 批次
 
 ```text
 POST /v4/build-ai-batches
@@ -246,7 +339,7 @@ POST /v4/build-ai-batches
 
 `path` 是服务端本地文件路径，主要用于排查和审计。平台不需要直接读取该文件，而是通过下面的 HTTP 接口获取 batch 内容。
 
-### 4.5 查询 AI 批次列表
+### 5.5 查询 AI 批次列表
 
 ```text
 POST /v4/list-ai-batches
@@ -289,7 +382,42 @@ POST /v4/list-ai-batches
 
 如果平台想一次拿到所有 batch 内容，可以传 `"include_content": true`。如果 batch 很多，推荐不要这样做，改用下一个接口逐个拉取。
 
-### 4.6 获取指定 AI 批次
+### 5.6 查询未完成 AI 批次 ID 列表
+
+```text
+POST /v4/list-pending-ai-batches
+```
+
+请求：
+
+```json
+{
+  "inspection_id": "uuid"
+}
+```
+
+响应：
+
+```json
+{
+  "ok": true,
+  "inspection_id": "uuid",
+  "batch_ids": [
+    "redis__10.0.0.12_9121",
+    "jvm__10.0.0.12_8080"
+  ],
+  "batch_progress": {
+    "total": 3,
+    "completed": 1,
+    "remaining": 2,
+    "done": false
+  }
+}
+```
+
+这个接口适合平台先拿到所有未完成的 `batch_id`，再逐个调用 `/v4/get-ai-batch` 获取详细内容。
+
+### 5.7 获取指定 AI 批次
 
 ```text
 POST /v4/get-ai-batch
@@ -325,7 +453,7 @@ POST /v4/get-ai-batch
 
 平台把 `batch` 字段作为 AI 输入，配合 `prompts_v4/batch_analysis.md` 调用大模型。
 
-### 4.7 获取下一个未分析 AI 批次
+### 5.8 获取下一个未分析 AI 批次
 
 ```text
 POST /v4/next-ai-batch
@@ -380,7 +508,7 @@ POST /v4/next-ai-batch
 
 这是平台循环编排最推荐使用的接口。平台每次取一个未完成 batch，调用 AI，保存 AI 结果，然后继续取下一个，直到 `done=true`。
 
-### 4.8 合并批次 AI 输出
+### 5.9 合并批次 AI 输出
 
 ```text
 POST /v4/merge-ai-batch-findings
@@ -423,7 +551,7 @@ POST /v4/merge-ai-batch-findings
 }
 ```
 
-### 4.9 构建最终关联分析输入
+### 5.10 构建最终关联分析输入
 
 ```text
 POST /v4/build-final-correlation-input
@@ -443,7 +571,7 @@ POST /v4/build-final-correlation-input
 ai_input/final_correlation.json
 ```
 
-### 4.10 合并最终关联分析
+### 5.11 合并最终关联分析
 
 ```text
 POST /v4/merge-final-correlation
@@ -461,7 +589,7 @@ POST /v4/merge-final-correlation
 }
 ```
 
-### 4.11 生成报告
+### 5.12 生成报告
 
 ```text
 POST /v4/report
@@ -492,7 +620,7 @@ POST /v4/report
 }
 ```
 
-## 5. 完整调用示例
+## 6. 完整调用示例
 
 下面用一次 Redis 巡检说明完整调用链路。示例中的 `inspection_id` 使用 `ins-001` 表示；真实接口会返回 UUID。
 
@@ -1119,7 +1247,7 @@ AI 输出：
 
 最终平台可以把 `report.content` 直接展示给用户，也可以只保存 `report.path`。
 
-## 6. 平台侧最小编排
+## 7. 平台侧最小编排
 
 ```python
 intent = call_llm(prompt_file="prompts_v4/intent_extraction.md", input=user_message)
@@ -1154,6 +1282,20 @@ while True:
         "finding": finding
     })
 
+# 如果平台更适合“先取全部未完成 batch_id，再逐个取详情”，也可以这样做：
+# pending = http_post("/v4/list-pending-ai-batches", {"inspection_id": inspection_id})
+# for batch_id in pending["batch_ids"]:
+#     batch = http_post("/v4/get-ai-batch", {
+#         "inspection_id": inspection_id,
+#         "batch_id": batch_id
+#     })["batch"]
+#     finding = call_llm(prompt_file="prompts_v4/batch_analysis.md", input=batch)
+#     http_post("/v4/merge-ai-batch-findings", {
+#         "inspection_id": inspection_id,
+#         "batch_id": batch_id,
+#         "finding": finding
+#     })
+
 correlation_input = http_post("/v4/build-final-correlation-input", {
     "inspection_id": inspection_id
 })["input"]
@@ -1171,7 +1313,7 @@ report = http_post("/v4/report", {
 })
 ```
 
-## 7. 设计取舍
+## 8. 设计取舍
 
 V4 推荐用于数据量较大的巡检：
 
