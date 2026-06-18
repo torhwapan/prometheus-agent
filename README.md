@@ -71,3 +71,25 @@ Severity levels:
 python -m unittest
 ```
 倒数第二行改成：self.write_json(inspection_id, "plan.json", plan_payload.get("plain"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
