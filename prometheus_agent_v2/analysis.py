@@ -28,6 +28,10 @@ def _analyze_task_result(result: Mapping[str, Any]) -> List[Dict[str, Any]]:
     task = result["task"]
     spec = task["spec"]
     if not result.get("ok"):
+        current_rows = result.get("current", [])
+        fallback_items = _fallback_current_only_items(task, current_rows, result.get("errors", []))
+        if fallback_items:
+            return fallback_items
         return [
             {
                 "job": task["job"],
@@ -98,7 +102,7 @@ def _analyze_points(
     if len(values) < 4:
         return {
             "severity": "unknown",
-            "reason": f"Only {len(values)} usable samples.",
+            "reason": f"采样点不足，当前仅有 {len(values)} 个有效点，无法判断趋势。",
             "point_count": len(values),
         }
 
@@ -118,20 +122,20 @@ def _analyze_points(
     severity = max_severity([threshold_severity, forecast_severity])
     reasons = []
     if threshold_severity in {"warning", "critical"}:
-        reasons.append(f"Current value is already {threshold_severity}.")
+        reasons.append(f"当前值已达到{_severity_cn(threshold_severity)}阈值。")
     if forecast_severity in {"warning", "critical"} and forecast_severity != threshold_severity:
-        reasons.append(f"24h forecast may reach {forecast_severity}.")
+        reasons.append(f"按当前趋势，24 小时内可能达到{_severity_cn(forecast_severity)}阈值。")
     if burst:
         severity = _raise_to_at_least(severity, "warning")
-        reasons.append("Recent samples show a burst.")
+        reasons.append("最近一段时间波动幅度明显放大，存在突增现象。")
     if sustained_growth:
         severity = _raise_to_at_least(severity, "info")
-        reasons.append("Series is continuously growing without clear slowdown.")
+        reasons.append("采样序列整体持续抬升，暂未看到明显回落。")
     if time_to_limit is not None and time_to_limit <= 24:
         severity = _raise_to_at_least(severity, "warning")
-        reasons.append(f"Estimated time to limit is {time_to_limit:.1f}h.")
+        reasons.append(f"按当前增速，预计约 {time_to_limit:.1f} 小时后触达上限。")
     if not reasons:
-        reasons.append("No obvious threshold breach, burst, or sustained growth risk.")
+        reasons.append("当前未发现明显超阈值、突增或持续恶化风险。")
 
     return {
         "severity": severity,
@@ -152,6 +156,56 @@ def _analyze_points(
         "max_value": spec.get("max_value"),
         "unit": spec.get("unit", ""),
     }
+
+
+def _fallback_current_only_items(
+    task: Mapping[str, Any],
+    current_rows: Sequence[Mapping[str, Any]],
+    errors: Sequence[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    spec = task.get("spec", {})
+    if not isinstance(spec, Mapping):
+        spec = {}
+    error_text = "; ".join(str(error.get("message") or "") for error in errors if isinstance(error, Mapping)).strip()
+    for series in current_rows:
+        if not isinstance(series, Mapping):
+            continue
+        labels = series.get("labels", {}) if isinstance(series.get("labels"), Mapping) else {}
+        current_value = _last_value(series.get("points", []))
+        severity = _threshold_severity(current_value, spec)
+        if current_value is None:
+            severity = "unknown"
+            reason = f"范围查询失败，且当前值不可用。{error_text}".strip()
+        else:
+            if severity in {"warning", "critical"}:
+                reason = f"范围查询失败，已退化为当前值判断；当前值已达到{_severity_cn(severity)}阈值。"
+            else:
+                reason = "范围查询失败，已退化为当前值判断；当前值未达到告警阈值。"
+            if error_text:
+                reason = f"{reason} {error_text}"
+        items.append(
+            {
+                "job": task["job"],
+                "instance": labels.get("instance") or task.get("instance"),
+                "metric_id": task["metric_id"],
+                "metric_name": task["metric_name"],
+                "series_labels": labels,
+                "severity": severity,
+                "reason": reason,
+                "analysis": {
+                    "current": current_value,
+                    "warning": spec.get("warning"),
+                    "critical": spec.get("critical"),
+                    "max_value": spec.get("max_value"),
+                    "unit": spec.get("unit", ""),
+                    "fallback_current_only": True,
+                },
+                "current_value": current_value,
+                "ai_comment": None,
+            }
+        )
+    return items
 
 
 def _threshold_severity(value: Optional[float], spec: Mapping[str, Any]) -> str:
@@ -270,6 +324,17 @@ def _raise_to_at_least(current: str, minimum: str) -> str:
     if SEVERITY_ORDER.get(current, 0) < SEVERITY_ORDER.get(minimum, 0):
         return minimum
     return current
+
+
+def _severity_cn(value: str) -> str:
+    mapping = {
+        "critical": "高危",
+        "warning": "预警",
+        "info": "关注",
+        "ok": "正常",
+        "unknown": "未知",
+    }
+    return mapping.get(value, value)
 
 
 def _counts(items: Sequence[Mapping[str, Any]]) -> Dict[str, int]:

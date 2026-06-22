@@ -102,8 +102,13 @@ def _task_from_spec(
     step_seconds: int,
     current_window: str,
 ) -> MetricQueryTask:
-    current_promql = spec.current_promql.replace("[5m]", f"[{current_window}]")
-    range_promql = spec.range_promql.replace("[5m]", f"[{current_window}]")
+    task_window = spec.current_window or current_window
+    effective_step = spec.step_seconds or step_seconds
+    effective_start = start
+    if spec.range_hours is not None and spec.range_hours > 0:
+        effective_start = end - timedelta(hours=spec.range_hours)
+    current_promql = spec.current_promql.replace("[5m]", f"[{task_window}]")
+    range_promql = spec.range_promql.replace("[5m]", f"[{task_window}]")
     current_promql = _apply_instance_filter(current_promql, instance)
     range_promql = _apply_instance_filter(range_promql, instance)
     instance_part = instance or "all"
@@ -115,9 +120,9 @@ def _task_from_spec(
         instance=instance,
         current_promql=current_promql,
         range_promql=range_promql,
-        start=start,
+        start=effective_start,
         end=end,
-        step_seconds=step_seconds,
+        step_seconds=effective_step,
         spec=spec,
     )
 

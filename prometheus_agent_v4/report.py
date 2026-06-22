@@ -486,7 +486,7 @@ def render_html_report(
           <p>仅展示非正常指标，适合领导快速定位需要关注的系统和实例。</p>
         </div>
       </div>
-      {('<table class="risk-table"><thead><tr><th>等级</th><th>指标</th><th>对象</th><th>当前值</th><th>规则判断</th><th>AI 补充</th><th>建议动作</th></tr></thead><tbody>' + ''.join(risk_rows) + '</tbody></table>') if risk_rows else '<div class="empty">本次巡检没有发现需要重点汇报的异常指标。</div>'}
+      {('<table class="risk-table"><thead><tr><th>等级</th><th>指标</th><th>对象</th><th>当前值</th><th>固定策略分析</th><th>AI 分析</th><th>建议动作</th></tr></thead><tbody>' + ''.join(risk_rows) + '</tbody></table>') if risk_rows else '<div class="empty">本次巡检没有发现需要重点汇报的异常指标。</div>'}
     </section>
 
     <section class="section">
@@ -678,7 +678,7 @@ def _render_instance_section(instance: str, items: Sequence[Mapping[str, Any]]) 
         "</summary>"
         '<div class="instance-body">'
         '<table class="detail-table">'
-        '<thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势 / 阈值</th><th>规则分析</th><th>AI 补充</th></tr></thead>'
+        '<thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势 / 阈值</th><th>固定策略分析</th><th>AI 分析</th></tr></thead>'
         f"<tbody>{rows}</tbody></table></div></details>"
     )
 
@@ -694,7 +694,7 @@ def _render_risk_row(item: Mapping[str, Any]) -> str:
         f"<div class='chips'>{''.join(_trend_chips(analysis))}</div></td>"
         f"<td><div>{html.escape(str(item.get('job') or ''))}</div><div class='muted'>{html.escape(str(item.get('instance') or ''))}</div></td>"
         f"<td>{html.escape(_format_value(item.get('current_value'), analysis.get('unit', '')))}{_render_progress(analysis)}</td>"
-        f"<td class='text-block'>{_render_text_block(item.get('reason'))}</td>"
+        f"<td class='text-block'>{_render_text_block(_strategy_text(item))}</td>"
         f"<td class='text-block'>{_render_text_block(item.get('ai_comment') or '无额外 AI 补充。')}</td>"
         f"<td class='text-block'>{_render_text_block(suggestion)}</td>"
         "</tr>"
@@ -711,7 +711,7 @@ def _render_detail_row(item: Mapping[str, Any]) -> str:
         f"<div class='metric-id'>{html.escape(str(item.get('metric_id') or ''))}</div></td>"
         f"<td>{html.escape(_format_value(item.get('current_value'), analysis.get('unit', '')))}</td>"
         f"<td>{trend_html}<div class='chips'>{''.join(_trend_chips(analysis))}</div></td>"
-        f"<td class='text-block'>{_render_text_block(item.get('reason'))}</td>"
+        f"<td class='text-block'>{_render_text_block(_strategy_text(item))}</td>"
         f"<td class='text-block'>{_render_text_block(item.get('ai_comment') or item.get('ai_suggestion') or '无')}</td>"
         "</tr>"
     )
@@ -818,6 +818,8 @@ def _progress_percent(analysis: Mapping[str, Any]) -> float | None:
 
 
 def _trend_summary(analysis: Mapping[str, Any]) -> str:
+    if analysis.get("fallback_current_only"):
+        return "范围趋势获取失败，本项仅根据当前值做阈值判断"
     current = _format_value(analysis.get("current"), analysis.get("unit", ""))
     forecast = _format_value(analysis.get("forecast_24h"), analysis.get("unit", "")) if analysis.get("forecast_24h") is not None else "n/a"
     slope = _format_value(analysis.get("slope_per_hour"), analysis.get("unit", "")) if analysis.get("slope_per_hour") is not None else "n/a"
@@ -826,6 +828,11 @@ def _trend_summary(analysis: Mapping[str, Any]) -> str:
 
 def _trend_chips(analysis: Mapping[str, Any]) -> List[str]:
     chips = []
+    if analysis.get("fallback_current_only"):
+        chips.append('<span class="chip">仅当前值判断</span>')
+        if analysis.get("warning") is not None:
+            chips.append(f'<span class="chip">{html.escape("阈值告警线 " + _format_value(analysis.get("warning"), analysis.get("unit", "")))}</span>')
+        return chips
     if analysis.get("burst"):
         chips.append('<span class="chip">存在突增</span>')
     if analysis.get("sustained_growth"):
@@ -852,6 +859,42 @@ def _primary_suggestion(item: Mapping[str, Any]) -> str:
     if severity == "info":
         return "建议保持关注，继续观察后续趋势变化。"
     return "暂无额外动作建议。"
+
+
+def _strategy_text(item: Mapping[str, Any]) -> str:
+    analysis = item.get("analysis") if isinstance(item.get("analysis"), Mapping) else {}
+    lines: List[str] = []
+    if analysis.get("fallback_current_only"):
+        lines.append("本项范围数据查询失败，固定策略已退化为当前值阈值判断。")
+    current_value = _format_value(item.get("current_value"), analysis.get("unit", ""))
+    lines.append(f"当前值：{current_value}")
+    warning = analysis.get("warning")
+    critical = analysis.get("critical")
+    if warning is not None or critical is not None:
+        threshold_text = []
+        if warning is not None:
+            threshold_text.append(f"预警阈值 { _format_value(warning, analysis.get('unit', '')) }")
+        if critical is not None:
+            threshold_text.append(f"高危阈值 { _format_value(critical, analysis.get('unit', '')) }")
+        lines.append("；".join(threshold_text))
+    if analysis.get("fallback_current_only"):
+        lines.append(str(item.get("reason") or ""))
+        return "\n".join(line for line in lines if line)
+    burst = "是" if analysis.get("burst") else "否"
+    sustained = "是" if analysis.get("sustained_growth") else "否"
+    lines.append(f"是否突增：{burst}")
+    lines.append(f"是否持续增长：{sustained}")
+    forecast = analysis.get("forecast_24h")
+    if forecast is not None:
+        lines.append(f"24h 预测值：{_format_value(forecast, analysis.get('unit', ''))}")
+    time_to_limit = analysis.get("time_to_limit_hours")
+    if time_to_limit is not None:
+        try:
+            lines.append(f"预计触顶时间：{float(time_to_limit):.1f} 小时")
+        except (TypeError, ValueError):
+            pass
+    lines.append(str(item.get("reason") or ""))
+    return "\n".join(line for line in lines if line)
 
 
 def _render_text_block(text: Any) -> str:

@@ -30,8 +30,8 @@ DEFAULT_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "id": "node_memory_usage",
             "name": "Memory Usage",
             "description": "Host memory usage based on MemAvailable.",
-            "current_promql": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
-            "range_promql": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "current_promql": "100 * (1 - (max by(job, instance) (node_memory_MemAvailable_bytes) / max by(job, instance) (node_memory_MemTotal_bytes)))",
+            "range_promql": "100 * (1 - (max by(job, instance) (node_memory_MemAvailable_bytes) / max by(job, instance) (node_memory_MemTotal_bytes)))",
             "value_type": "percent",
             "unit": "%",
             "direction": "higher_is_bad",
@@ -86,6 +86,54 @@ DEFAULT_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "max_value": 100,
             "labels_to_keep": ["job", "instance", "device"],
         },
+        {
+            "id": "node_disk_read_bytes_rate",
+            "name": "Disk Read Throughput",
+            "description": "Disk read bytes per second by device.",
+            "current_promql": "rate(node_disk_read_bytes_total{device!~\"loop.*|ram.*\"}[5m])",
+            "range_promql": "rate(node_disk_read_bytes_total{device!~\"loop.*|ram.*\"}[5m])",
+            "value_type": "number",
+            "unit": "B/s",
+            "direction": "higher_is_bad",
+            "analysis_methods": ["burst", "sustained_growth"],
+            "labels_to_keep": ["job", "instance", "device"],
+        },
+        {
+            "id": "node_disk_written_bytes_rate",
+            "name": "Disk Write Throughput",
+            "description": "Disk write bytes per second by device.",
+            "current_promql": "rate(node_disk_written_bytes_total{device!~\"loop.*|ram.*\"}[5m])",
+            "range_promql": "rate(node_disk_written_bytes_total{device!~\"loop.*|ram.*\"}[5m])",
+            "value_type": "number",
+            "unit": "B/s",
+            "direction": "higher_is_bad",
+            "analysis_methods": ["burst", "sustained_growth"],
+            "labels_to_keep": ["job", "instance", "device"],
+        },
+        {
+            "id": "node_network_receive_bytes_rate",
+            "name": "Network Receive Throughput",
+            "description": "Network receive bytes per second by interface.",
+            "current_promql": "sum by(job, instance) (rate(node_network_receive_bytes_total{device!~\"lo|docker.*|veth.*|br.*|cni.*\"}[5m]))",
+            "range_promql": "sum by(job, instance) (rate(node_network_receive_bytes_total{device!~\"lo|docker.*|veth.*|br.*|cni.*\"}[5m]))",
+            "value_type": "number",
+            "unit": "B/s",
+            "direction": "higher_is_bad",
+            "analysis_methods": ["burst", "sustained_growth"],
+            "labels_to_keep": ["job", "instance"],
+        },
+        {
+            "id": "node_network_transmit_bytes_rate",
+            "name": "Network Transmit Throughput",
+            "description": "Network transmit bytes per second by interface.",
+            "current_promql": "sum by(job, instance) (rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|veth.*|br.*|cni.*\"}[5m]))",
+            "range_promql": "sum by(job, instance) (rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|veth.*|br.*|cni.*\"}[5m]))",
+            "value_type": "number",
+            "unit": "B/s",
+            "direction": "higher_is_bad",
+            "analysis_methods": ["burst", "sustained_growth"],
+            "labels_to_keep": ["job", "instance"],
+        },
     ],
     "java_jmx": [
         {
@@ -130,6 +178,20 @@ DEFAULT_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "analysis_methods": ["threshold", "burst", "sustained_growth"],
             "warning": 0.05,
             "critical": 0.2,
+            "labels_to_keep": ["job", "instance"],
+        },
+        {
+            "id": "jvm_gc_count_increase",
+            "name": "JVM GC Count Increase",
+            "description": "Increase of JVM GC collection count in the current observation window.",
+            "current_promql": "(sum by(job, instance) (increase(jvm_gc_collection_seconds_count{job=\"java_jmx\"}[5m]))) or (sum by(job, instance) (increase(jvm_gc_pause_seconds_count{job=\"java_jmx\"}[5m]))) or (sum by(job, instance) (increase(java_lang_GarbageCollector_CollectionCount{job=\"java_jmx\"}[5m])))",
+            "range_promql": "(sum by(job, instance) (increase(jvm_gc_collection_seconds_count{job=\"java_jmx\"}[5m]))) or (sum by(job, instance) (increase(jvm_gc_pause_seconds_count{job=\"java_jmx\"}[5m]))) or (sum by(job, instance) (increase(java_lang_GarbageCollector_CollectionCount{job=\"java_jmx\"}[5m])))",
+            "value_type": "number",
+            "unit": "count",
+            "direction": "higher_is_bad",
+            "analysis_methods": ["threshold", "burst", "sustained_growth"],
+            "warning": 50,
+            "critical": 200,
             "labels_to_keep": ["job", "instance"],
         },
         {
@@ -336,6 +398,9 @@ DEFAULT_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "critical": 40,
             "max_value": 100,
             "labels_to_keep": ["job", "instance", "cluster", "vhost", "queue"],
+            "range_hours": 6,
+            "step_seconds": 120,
+            "current_window": "10m",
         },
         {
             "id": "rabbitmq_node_mem_alarm",
@@ -460,6 +525,9 @@ def _to_metric_spec(job: str, item: Mapping[str, Any]) -> MetricSpec:
         critical=_optional_float(item.get("critical")),
         max_value=_optional_float(item.get("max_value")),
         labels_to_keep=[str(label) for label in item.get("labels_to_keep", [])],
+        current_window=str(item.get("current_window")) if item.get("current_window") not in {None, ""} else None,
+        range_hours=_optional_float(item.get("range_hours")),
+        step_seconds=_optional_int(item.get("step_seconds")),
     )
 
 
@@ -467,3 +535,9 @@ def _optional_float(value: Any) -> Optional[float]:
     if value is None or value == "":
         return None
     return float(value)
+
+
+def _optional_int(value: Any) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    return int(value)

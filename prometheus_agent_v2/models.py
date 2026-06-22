@@ -58,6 +58,9 @@ class MetricSpec:
     critical: Optional[float] = None
     max_value: Optional[float] = None
     labels_to_keep: List[str] = field(default_factory=list)
+    current_window: Optional[str] = None
+    range_hours: Optional[float] = None
+    step_seconds: Optional[int] = None
 
 
 @dataclass(frozen=True)
