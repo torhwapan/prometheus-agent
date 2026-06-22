@@ -819,19 +819,21 @@ def _progress_percent(analysis: Mapping[str, Any]) -> float | None:
 
 def _trend_summary(analysis: Mapping[str, Any]) -> str:
     if analysis.get("fallback_current_only"):
-        return "范围趋势获取失败，本项仅根据当前值做阈值判断"
-    current = _format_value(analysis.get("current"), analysis.get("unit", ""))
-    forecast = _format_value(analysis.get("forecast_24h"), analysis.get("unit", "")) if analysis.get("forecast_24h") is not None else "n/a"
-    slope = _format_value(analysis.get("slope_per_hour"), analysis.get("unit", "")) if analysis.get("slope_per_hour") is not None else "n/a"
-    return f"当前 {current}，24h 预测 {forecast}，每小时变化 {slope}"
+        return "范围趋势获取失败，本项没有可用的趋势分析结果"
+    parts: List[str] = []
+    forecast = analysis.get("forecast_24h")
+    if forecast is not None:
+        parts.append(f"24h 预测 { _format_value(forecast, analysis.get('unit', '')) }")
+    slope = analysis.get("slope_per_hour")
+    if slope is not None:
+        parts.append(f"每小时变化 { _format_value(slope, analysis.get('unit', '')) }")
+    return "，".join(parts) if parts else "当前未形成有效趋势结论"
 
 
 def _trend_chips(analysis: Mapping[str, Any]) -> List[str]:
     chips = []
     if analysis.get("fallback_current_only"):
         chips.append('<span class="chip">仅当前值判断</span>')
-        if analysis.get("warning") is not None:
-            chips.append(f'<span class="chip">{html.escape("阈值告警线 " + _format_value(analysis.get("warning"), analysis.get("unit", "")))}</span>')
         return chips
     if analysis.get("burst"):
         chips.append('<span class="chip">存在突增</span>')
@@ -840,8 +842,6 @@ def _trend_chips(analysis: Mapping[str, Any]) -> List[str]:
     time_to_limit = _to_float(analysis.get("time_to_limit_hours"))
     if time_to_limit is not None:
         chips.append(f'<span class="chip">{html.escape(f"{time_to_limit:.1f}h 可能触顶")}</span>')
-    if analysis.get("warning") is not None:
-        chips.append(f'<span class="chip">{html.escape("阈值告警线 " + _format_value(analysis.get("warning"), analysis.get("unit", "")))}</span>')
     return chips
 
 
@@ -865,35 +865,29 @@ def _strategy_text(item: Mapping[str, Any]) -> str:
     analysis = item.get("analysis") if isinstance(item.get("analysis"), Mapping) else {}
     lines: List[str] = []
     if analysis.get("fallback_current_only"):
-        lines.append("本项范围数据查询失败，固定策略已退化为当前值阈值判断。")
-    current_value = _format_value(item.get("current_value"), analysis.get("unit", ""))
-    lines.append(f"当前值：{current_value}")
-    warning = analysis.get("warning")
-    critical = analysis.get("critical")
-    if warning is not None or critical is not None:
-        threshold_text = []
-        if warning is not None:
-            threshold_text.append(f"预警阈值 { _format_value(warning, analysis.get('unit', '')) }")
-        if critical is not None:
-            threshold_text.append(f"高危阈值 { _format_value(critical, analysis.get('unit', '')) }")
-        lines.append("；".join(threshold_text))
-    if analysis.get("fallback_current_only"):
-        lines.append(str(item.get("reason") or ""))
+        lines.append("范围趋势查询失败，本项未执行突增和持续增长分析。")
         return "\n".join(line for line in lines if line)
-    burst = "是" if analysis.get("burst") else "否"
-    sustained = "是" if analysis.get("sustained_growth") else "否"
-    lines.append(f"是否突增：{burst}")
-    lines.append(f"是否持续增长：{sustained}")
+    burst_flag = analysis.get("burst")
+    sustained_flag = analysis.get("sustained_growth")
+    if burst_flag is True:
+        lines.append("突增检测：发现突增")
+    elif burst_flag is False:
+        lines.append("突增检测：未发现突增")
+    if sustained_flag is True:
+        lines.append("持续增长检测：发现持续增长")
+    elif sustained_flag is False:
+        lines.append("持续增长检测：未发现持续增长")
     forecast = analysis.get("forecast_24h")
-    if forecast is not None:
+    if forecast is not None and sustained_flag:
         lines.append(f"24h 预测值：{_format_value(forecast, analysis.get('unit', ''))}")
     time_to_limit = analysis.get("time_to_limit_hours")
-    if time_to_limit is not None:
+    if time_to_limit is not None and sustained_flag:
         try:
             lines.append(f"预计触顶时间：{float(time_to_limit):.1f} 小时")
         except (TypeError, ValueError):
             pass
-    lines.append(str(item.get("reason") or ""))
+    if not lines:
+        lines.append("固定策略未发现明显趋势异常。")
     return "\n".join(line for line in lines if line)
 
 
