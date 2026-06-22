@@ -1,4 +1,4 @@
-"""Executive-style HTML report rendering for Prometheus agent v4."""
+"""Inspection-style HTML report rendering for Prometheus agent v4."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ def render_html_report(
     counts = _normalize_counts(analysis.get("counts"))
     total = len(enriched_items)
     risky_items = [item for item in enriched_items if str(item.get("severity") or "unknown") != "ok"]
-    top_risks = sorted(risky_items, key=_item_sort_key, reverse=True)[:8]
+    top_risks = sorted(risky_items, key=_item_sort_key, reverse=True)[:10]
     grouped = _group_items(enriched_items)
     job_count = len({str(item.get("job") or "unknown") for item in enriched_items})
     instance_count = len({str(item.get("instance") or "unknown") for item in enriched_items})
@@ -52,12 +52,13 @@ def render_html_report(
         risky_count=len(risky_items),
         ai_correlation=ai_correlation,
     )
-
-    detail_sections = []
-    for job, instances in grouped:
-        detail_sections.append(_render_job_section(job, instances))
-
+    inspection_id = str(meta.get("inspection_id") or plan.get("inspection_id") or "").strip()
+    toc_items = _build_toc_items(grouped)
+    detail_sections = [_render_job_section(job, instances) for job, instances in grouped]
     risk_rows = [_render_risk_row(item) for item in top_risks]
+    summary_source = ai_correlation.get("summary") if isinstance(ai_correlation, Mapping) else executive_summary
+    focus_list = _render_focus_list(top_risks)
+    inspection_note = _build_inspection_note(plan, counts, total)
 
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -67,126 +68,315 @@ def render_html_report(
   <title>Prometheus 巡检报告</title>
   <style>
     :root {{
-      --bg: #eef4f8;
-      --bg-accent: #f8fbfd;
-      --surface: #ffffff;
-      --surface-alt: #f4f8fb;
-      --text: #17324d;
-      --muted: #5f7488;
-      --line: #d6e2ec;
-      --shadow: 0 18px 48px rgba(19, 50, 77, 0.08);
+      --page-bg: #f3f6f8;
+      --paper: #ffffff;
+      --paper-subtle: #f8fafb;
+      --paper-strong: #f0f4f6;
+      --text: #16212b;
+      --muted: #61717f;
+      --line: #d9e1e7;
+      --line-strong: #c7d2dc;
+      --navy: #1f3c59;
+      --navy-soft: #2c547d;
+      --accent: #2a6f97;
       --critical: #b42318;
-      --critical-bg: #fde7e4;
-      --warning: #c46b00;
-      --warning-bg: #fff1db;
-      --info: #0b5cad;
-      --info-bg: #deecff;
-      --ok: #0f7b52;
-      --ok-bg: #dcf5e8;
+      --critical-bg: #fde8e6;
+      --warning: #b54708;
+      --warning-bg: #fff1dd;
+      --info: #175cd3;
+      --info-bg: #e8f1ff;
+      --ok: #027a48;
+      --ok-bg: #e7f8ef;
       --unknown: #667085;
-      --unknown-bg: #edf0f3;
-      --hero-start: #163b63;
-      --hero-end: #1e6f8b;
+      --unknown-bg: #eff2f5;
+      --shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
     }}
     * {{ box-sizing: border-box; }}
+    html {{ scroll-behavior: smooth; }}
     body {{
       margin: 0;
       color: var(--text);
       font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-      background:
-        radial-gradient(circle at top right, rgba(30, 111, 139, 0.18), transparent 22%),
-        linear-gradient(180deg, #f7fbfe 0%, var(--bg) 100%);
+      background: linear-gradient(180deg, #eef3f6 0%, var(--page-bg) 100%);
     }}
-    .page {{ max-width: 1360px; margin: 0 auto; padding: 28px 24px 56px; }}
-    .hero {{
-      padding: 30px 32px;
-      border-radius: 22px;
-      color: #fff;
-      background: linear-gradient(135deg, var(--hero-start), var(--hero-end));
+    a {{
+      color: inherit;
+      text-decoration: none;
+    }}
+    .page {{
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }}
+    .report-shell {{
+      position: relative;
+    }}
+    .toc {{
+      position: fixed;
+      left: calc(max(12px, calc((100vw - 1380px) / 2 + 20px)) - 54px);
+      top: 32px;
+      z-index: 30;
+    }}
+    .toc summary {{
+      list-style: none;
+    }}
+    .toc summary::-webkit-details-marker {{
+      display: none;
+    }}
+    .toc-button {{
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      border: 1px solid rgba(217, 225, 231, 0.95);
+      background: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 10px 22px rgba(22, 33, 43, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #284766;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }}
+    .toc-button:hover {{
+      transform: translateY(-1px);
+      box-shadow: 0 14px 28px rgba(22, 33, 43, 0.16);
+      background: #fff;
+    }}
+    .toc-icon {{
+      position: relative;
+      width: 14px;
+      height: 12px;
+    }}
+    .toc-icon::before,
+    .toc-icon::after,
+    .toc-icon span {{
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 14px;
+      height: 2px;
+      border-radius: 999px;
+      background: currentColor;
+    }}
+    .toc-icon::before {{
+      top: 0;
+    }}
+    .toc-icon span {{
+      top: 5px;
+    }}
+    .toc-icon::after {{
+      top: 10px;
+    }}
+    .toc-panel {{
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: 224px;
+      min-width: 224px;
+      padding: 10px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(10px);
       box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-4px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }}
+    .toc[open] .toc-panel {{
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }}
+    .toc-link {{
+      display: flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      color: #203547;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+    }}
+    .toc-link:hover {{
+      background: #eef4f8;
+    }}
+    .toc-link + .toc-link {{
+      margin-top: 2px;
+    }}
+    .toc-link-child {{
+      position: relative;
+      padding-left: 26px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }}
+    .toc-link-child::before {{
+      content: "";
+      position: absolute;
+      left: 12px;
+      top: 15px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #c4d0da;
+    }}
+    .content {{
+      min-width: 0;
+    }}
+    .hero {{
+      background: linear-gradient(135deg, #274767 0%, #335f87 58%, #4a7898 100%);
+      color: #fff;
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 26px 28px 24px;
       position: relative;
       overflow: hidden;
     }}
     .hero::after {{
       content: "";
       position: absolute;
-      inset: auto -40px -55px auto;
-      width: 260px;
-      height: 260px;
+      right: -60px;
+      top: -30px;
+      width: 220px;
+      height: 220px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.07);
     }}
-    .eyebrow {{
-      display: inline-flex;
-      gap: 8px;
-      align-items: center;
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.12);
-      font-size: 13px;
-    }}
-    h1 {{ margin: 16px 0 10px; font-size: 34px; line-height: 1.15; }}
-    .hero p {{ margin: 0; max-width: 900px; color: rgba(255, 255, 255, 0.88); line-height: 1.7; }}
-    .hero-meta {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 18px;
-    }}
-    .hero-tag {{
-      display: inline-flex;
-      align-items: center;
-      padding: 8px 12px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.12);
-      color: #fff;
-      font-size: 13px;
-    }}
-    .grid {{
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 22px;
-    }}
-    .card {{
-      background: var(--surface);
-      border: 1px solid rgba(214, 226, 236, 0.85);
-      border-radius: 18px;
-      box-shadow: var(--shadow);
-      padding: 20px;
-    }}
-    .metric-card {{
-      min-height: 132px;
-      background:
-        linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(248,251,253,0.95) 100%);
-    }}
-    .metric-card .label {{ color: var(--muted); font-size: 13px; margin-bottom: 10px; }}
-    .metric-card .value {{ font-size: 34px; font-weight: 700; line-height: 1; }}
-    .metric-card .sub {{ margin-top: 10px; color: var(--muted); font-size: 13px; }}
-    .section {{
-      margin-top: 22px;
-      padding: 22px;
-      border-radius: 18px;
-      background: var(--surface);
-      border: 1px solid rgba(214, 226, 236, 0.85);
-      box-shadow: var(--shadow);
-    }}
-    .section-head {{
+    .hero-top {{
       display: flex;
       justify-content: space-between;
       gap: 16px;
       align-items: flex-start;
-      margin-bottom: 16px;
     }}
-    .section-head h2 {{
+    .hero-kicker {{
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }}
+    .hero h1 {{
+      margin: 12px 0 10px;
+      font-size: 32px;
+      line-height: 1.18;
+    }}
+    .hero p {{
       margin: 0;
-      font-size: 22px;
-      line-height: 1.2;
+      max-width: 940px;
+      color: rgba(255, 255, 255, 0.88);
+      line-height: 1.72;
+      font-size: 14px;
     }}
-    .section-head p {{
-      margin: 6px 0 0;
+    .report-stamp {{
+      text-align: right;
+      min-width: 200px;
+      position: relative;
+      z-index: 1;
+    }}
+    .report-stamp .stamp-label {{
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.74);
+    }}
+    .report-stamp .stamp-value {{
+      margin-top: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #fff;
+      word-break: break-word;
+    }}
+    .hero-meta {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+      position: relative;
+      z-index: 1;
+    }}
+    .hero-meta-card {{
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }}
+    .hero-meta-card .label {{
+      display: block;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.72);
+      margin-bottom: 6px;
+    }}
+    .hero-meta-card .value {{
+      font-size: 14px;
+      color: #fff;
+      line-height: 1.55;
+      word-break: break-word;
+    }}
+    .stat-grid {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }}
+    .stat-card {{
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow);
+    }}
+    .stat-card .label {{
       color: var(--muted);
-      line-height: 1.65;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }}
+    .stat-card .value {{
+      font-size: 30px;
+      font-weight: 700;
+      line-height: 1;
+      color: #1c2c3a;
+    }}
+    .stat-card .sub {{
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }}
+    .section {{
+      margin-top: 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }}
+    .section-anchor {{
+      scroll-margin-top: 18px;
+    }}
+    .section-head {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px 0;
+    }}
+    .section-title-wrap h2 {{
+      margin: 0;
+      font-size: 21px;
+      line-height: 1.25;
+      color: #1e3142;
+    }}
+    .section-title-wrap p {{
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }}
+    .section-body {{
+      padding: 18px 20px 20px;
     }}
     .badge {{
       display: inline-flex;
@@ -202,28 +392,32 @@ def render_html_report(
     .info {{ color: var(--info); background: var(--info-bg); }}
     .ok {{ color: var(--ok); background: var(--ok-bg); }}
     .unknown {{ color: var(--unknown); background: var(--unknown-bg); }}
-    .summary-layout {{
+    .overview-grid {{
       display: grid;
-      grid-template-columns: 1.4fr 1fr;
-      gap: 18px;
+      grid-template-columns: 1.45fr 1fr;
+      gap: 16px;
     }}
-    .summary-box {{
-      background: var(--surface-alt);
-      border-radius: 16px;
+    .panel {{
       border: 1px solid var(--line);
-      padding: 18px;
+      border-radius: 14px;
+      background: var(--paper-subtle);
+      padding: 16px;
     }}
-    .summary-box h3 {{
+    .panel h3 {{
       margin: 0 0 12px;
-      font-size: 16px;
+      font-size: 15px;
+      color: #24384b;
     }}
-    .summary-box p, .summary-box li {{
+    .panel p,
+    .panel li {{
+      line-height: 1.72;
       color: var(--text);
-      line-height: 1.7;
+      font-size: 14px;
     }}
-    .summary-box ul, .summary-box ol {{
+    .panel ul,
+    .panel ol {{
       margin: 0;
-      padding-left: 20px;
+      padding-left: 18px;
     }}
     .count-list {{
       display: grid;
@@ -231,99 +425,219 @@ def render_html_report(
       gap: 10px;
     }}
     .count-item {{
-      padding: 12px 14px;
-      border-radius: 14px;
+      padding: 12px 12px 10px;
+      border-radius: 12px;
       background: #fff;
       border: 1px solid var(--line);
     }}
     .count-item strong {{
       display: block;
-      margin-bottom: 4px;
       font-size: 22px;
       line-height: 1;
+      margin-bottom: 6px;
     }}
-    .risk-table {{
+    .note-list {{
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }}
+    .note-item {{
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }}
+    .note-item .key {{
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .note-item .value {{
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.7;
+      word-break: break-word;
+    }}
+    .focus-list {{
+      display: grid;
+      gap: 10px;
+    }}
+    .focus-item {{
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--paper-subtle);
+    }}
+    .focus-main {{
+      min-width: 0;
+    }}
+    .focus-title {{
+      font-weight: 700;
+      line-height: 1.5;
+      margin-bottom: 4px;
+    }}
+    .focus-meta {{
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+      margin-bottom: 6px;
+    }}
+    .focus-reason {{
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.7;
+    }}
+    .risk-table,
+    .detail-table {{
       width: 100%;
       border-collapse: separate;
       border-spacing: 0;
-      overflow: hidden;
       border: 1px solid var(--line);
-      border-radius: 16px;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
     }}
-    .risk-table thead th {{
-      background: #eaf2f8;
-      color: #30506f;
+    .risk-table thead th,
+    .detail-table thead th {{
+      background: var(--paper-strong);
+      color: #38536a;
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }}
-    .risk-table th, .risk-table td {{
-      padding: 14px 14px;
-      vertical-align: top;
+    .risk-table th,
+    .risk-table td,
+    .detail-table th,
+    .detail-table td {{
+      padding: 12px 12px;
       text-align: left;
+      vertical-align: top;
       border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      line-height: 1.65;
     }}
-    .risk-table tr:last-child td {{ border-bottom: none; }}
+    .risk-table tr:last-child td,
+    .detail-table tr:last-child td {{
+      border-bottom: none;
+    }}
     .metric-name {{
       font-weight: 700;
+      color: #203345;
       margin-bottom: 4px;
+      line-height: 1.45;
     }}
     .metric-id {{
       color: var(--muted);
       font-size: 12px;
+      line-height: 1.5;
+      word-break: break-all;
     }}
     .muted {{
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.6;
+      font-size: 12px;
+      line-height: 1.65;
     }}
     .chips {{
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
       margin-top: 8px;
     }}
     .chip {{
       display: inline-flex;
       padding: 4px 8px;
       border-radius: 999px;
-      background: #eef4f8;
-      color: #33536f;
+      background: #edf3f7;
+      color: #39566e;
       font-size: 12px;
+      line-height: 1;
+    }}
+    .trend-cell {{
+      min-width: 180px;
+    }}
+    .text-block p {{
+      margin: 0 0 8px;
+      line-height: 1.72;
+    }}
+    .text-block ul,
+    .text-block ol {{
+      margin: 0 0 8px;
+      padding-left: 18px;
+      line-height: 1.72;
+    }}
+    .text-block code {{
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: rgba(39, 71, 103, 0.08);
+      font-family: Consolas, monospace;
+      font-size: 0.92em;
     }}
     .callout {{
-      padding: 16px 18px;
-      border-radius: 16px;
-      background: linear-gradient(180deg, rgba(30, 111, 139, 0.09), rgba(22, 59, 99, 0.03));
-      border: 1px solid rgba(30, 111, 139, 0.18);
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid #d8e5ef;
+      background: linear-gradient(180deg, #f7fbff 0%, #f3f8fc 100%);
     }}
-    .callout p:last-child {{ margin-bottom: 0; }}
     .correlation-list {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 16px;
+      gap: 14px;
+      margin-top: 14px;
     }}
     .correlation-card {{
-      padding: 18px;
-      border-radius: 16px;
+      padding: 16px;
+      border-radius: 14px;
       border: 1px solid var(--line);
-      background: var(--surface-alt);
+      background: var(--paper-subtle);
     }}
     .correlation-card h3 {{
-      margin: 10px 0 10px;
-      font-size: 17px;
-      line-height: 1.4;
+      margin: 10px 0 8px;
+      font-size: 16px;
+      line-height: 1.45;
     }}
     .correlation-card p {{
       margin: 0 0 8px;
-      line-height: 1.7;
+      line-height: 1.72;
+      font-size: 13px;
+    }}
+    .job-section + .job-section {{
+      margin-top: 16px;
+    }}
+    .job-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 16px 18px;
+      background: #f7fafc;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }}
+    .job-head h3 {{
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.35;
+      color: #21384b;
+    }}
+    .job-head p {{
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.68;
     }}
     .instance-section {{
+      margin-top: 12px;
       border: 1px solid var(--line);
-      border-radius: 16px;
-      background: var(--surface-alt);
-      margin-top: 14px;
+      border-radius: 14px;
+      background: var(--paper-subtle);
       overflow: hidden;
     }}
     .instance-section summary {{
@@ -333,48 +647,30 @@ def render_html_report(
       display: flex;
       justify-content: space-between;
       gap: 16px;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.75);
+      align-items: flex-start;
+      background: #fff;
     }}
-    .instance-section summary::-webkit-details-marker {{ display: none; }}
+    .instance-section summary::-webkit-details-marker {{
+      display: none;
+    }}
     .instance-title {{
       font-weight: 700;
       margin-bottom: 6px;
+      line-height: 1.45;
     }}
     .instance-meta {{
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
+      line-height: 1.65;
     }}
     .instance-body {{
-      padding: 0 18px 18px;
+      padding: 0 16px 16px;
     }}
-    .detail-table {{
-      width: 100%;
-      border-collapse: collapse;
-      background: #fff;
-      border-radius: 14px;
-      overflow: hidden;
-      border: 1px solid var(--line);
-    }}
-    .detail-table th, .detail-table td {{
-      padding: 12px 12px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-    }}
-    .detail-table th {{
-      background: #eef5fa;
-      font-size: 12px;
-      color: #35536f;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }}
-    .detail-table tr:last-child td {{ border-bottom: none; }}
     .progress {{
-      width: 120px;
+      width: 126px;
       height: 8px;
       border-radius: 999px;
-      background: #e6edf3;
+      background: #e7edf2;
       overflow: hidden;
       margin-top: 8px;
     }}
@@ -382,134 +678,258 @@ def render_html_report(
       display: block;
       height: 100%;
       border-radius: inherit;
-      background: linear-gradient(90deg, #3b82f6, #1f8b7b);
-    }}
-    .text-block p {{
-      margin: 0 0 8px;
-      line-height: 1.7;
-    }}
-    .text-block ul, .text-block ol {{
-      margin: 0 0 8px;
-      padding-left: 20px;
-      line-height: 1.7;
-    }}
-    .text-block code {{
-      padding: 1px 6px;
-      border-radius: 8px;
-      background: rgba(19, 50, 77, 0.08);
-      font-family: Consolas, monospace;
-      font-size: 0.92em;
+      background: linear-gradient(90deg, #2f6fed, #2d8b76);
     }}
     .empty {{
       padding: 18px;
-      border: 1px dashed var(--line);
-      border-radius: 16px;
+      border-radius: 12px;
+      border: 1px dashed var(--line-strong);
+      background: #fbfcfd;
       color: var(--muted);
-      background: #fbfdff;
-      line-height: 1.7;
+      line-height: 1.72;
+      font-size: 13px;
     }}
-    @media (max-width: 1100px) {{
-      .grid, .summary-layout, .correlation-list {{ grid-template-columns: 1fr 1fr; }}
+    @media (max-width: 1180px) {{
+      .toc {{
+        left: 12px;
+        top: 20px;
+      }}
+      .toc-panel {{
+        top: calc(100% + 8px);
+        left: auto;
+        right: 0;
+        transform: translateY(-4px);
+      }}
+      .hero-meta,
+      .stat-grid,
+      .overview-grid,
+      .correlation-list {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }}
     }}
     @media (max-width: 860px) {{
-      .page {{ padding: 18px 14px 36px; }}
-      .hero {{ padding: 24px 20px; border-radius: 18px; }}
-      h1 {{ font-size: 28px; }}
-      .grid, .summary-layout, .correlation-list {{ grid-template-columns: 1fr; }}
-      .risk-table, .detail-table {{ display: block; overflow-x: auto; }}
-      .section {{ padding: 18px; }}
+      .page {{
+        padding: 14px 12px 30px;
+      }}
+      .toc {{
+        top: 12px;
+      }}
+      .toc-panel {{
+        width: min(224px, calc(100vw - 24px));
+        min-width: 0;
+      }}
+      .hero {{
+        padding: 22px 18px 18px;
+      }}
+      .hero-top {{
+        display: block;
+      }}
+      .report-stamp {{
+        margin-top: 14px;
+        text-align: left;
+        min-width: 0;
+      }}
+      .hero h1 {{
+        font-size: 26px;
+      }}
+      .hero-meta,
+      .stat-grid,
+      .overview-grid,
+      .correlation-list,
+      .count-list {{
+        grid-template-columns: 1fr;
+      }}
+      .risk-table,
+      .detail-table {{
+        display: block;
+        overflow-x: auto;
+      }}
+      .section-head,
+      .job-head,
+      .instance-section summary {{
+        display: block;
+      }}
+      .section-body {{
+        padding: 16px;
+      }}
+      .note-item {{
+        grid-template-columns: 1fr;
+      }}
     }}
   </style>
 </head>
 <body>
   <div class="page">
-    <section class="hero">
-      <div class="eyebrow">Prometheus Inspection Report</div>
-      <h1>Prometheus 巡检报告</h1>
-      <p>{html.escape(executive_summary)}</p>
-      <div class="hero-meta">
-        <span class="hero-tag">Prometheus: {html.escape(_display_prometheus(plan.get("prometheus_url")))}</span>
-        <span class="hero-tag">巡检范围: {html.escape(_display_scope(plan.get("job"), plan.get("instance")))}</span>
-        <span class="hero-tag">时间窗口: {html.escape(_display_time_window(plan))}</span>
-        <span class="hero-tag">生成时间: {html.escape(report_time)}</span>
-      </div>
-    </section>
-
-    <section class="grid">
-      <div class="card metric-card">
-        <div class="label">总体风险等级</div>
-        <div class="value">{html.escape(SEVERITY_LABELS.get(str(analysis.get("severity") or "unknown"), "未知"))}</div>
-        <div class="sub">{_badge(str(analysis.get("severity") or "unknown"))}</div>
-      </div>
-      <div class="card metric-card">
-        <div class="label">重点关注指标</div>
-        <div class="value">{len(risky_items)}</div>
-        <div class="sub">总指标 {total} 项</div>
-      </div>
-      <div class="card metric-card">
-        <div class="label">巡检对象</div>
-        <div class="value">{job_count}</div>
-        <div class="sub">Job 数量 / 实例数 {instance_count}</div>
-      </div>
-      <div class="card metric-card">
-        <div class="label">高优先风险</div>
-        <div class="value">{counts["critical"] + counts["warning"]}</div>
-        <div class="sub">高危 {counts["critical"]} / 预警 {counts["warning"]}</div>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="section-head">
-        <div>
-          <h2>执行摘要</h2>
-          <p>这一部分面向汇报场景，优先说明整体风险、重点指标和建议关注方向。</p>
+    <div class="report-shell">
+      <details class="toc">
+        <summary>
+          <div class="toc-button" aria-hidden="true"><div class="toc-icon"><span></span></div></div>
+        </summary>
+        <div class="toc-panel">
+          {''.join(toc_items)}
         </div>
-      </div>
-      <div class="summary-layout">
-        <div class="summary-box text-block">{_render_text_block(ai_correlation.get("summary") if isinstance(ai_correlation, Mapping) else executive_summary)}</div>
-        <div class="summary-box">
-          <h3>风险统计</h3>
-          <div class="count-list">
-            {_render_count_item("高危", counts["critical"], "critical")}
-            {_render_count_item("预警", counts["warning"], "warning")}
-            {_render_count_item("关注", counts["info"], "info")}
-            {_render_count_item("正常", counts["ok"], "ok")}
+      </details>
+
+      <main class="content">
+        <section class="hero">
+          <div class="hero-top">
+            <div>
+              <div class="hero-kicker">Prometheus Inspection Report</div>
+              <h1>Prometheus 巡检报告</h1>
+              <p>{html.escape(executive_summary)}</p>
+            </div>
+            <div class="report-stamp">
+              <div class="stamp-label">报告编号</div>
+              <div class="stamp-value">{html.escape(inspection_id or "未指定")}</div>
+              <div class="stamp-label" style="margin-top:12px;">生成时间</div>
+              <div class="stamp-value">{html.escape(report_time)}</div>
+            </div>
           </div>
-        </div>
-      </div>
-    </section>
+          <div class="hero-meta">
+            <div class="hero-meta-card">
+              <span class="label">Prometheus 地址</span>
+              <div class="value">{html.escape(_display_prometheus(plan.get("prometheus_url")))}</div>
+            </div>
+            <div class="hero-meta-card">
+              <span class="label">巡检范围</span>
+              <div class="value">{html.escape(_display_scope(plan.get("job"), plan.get("instance")))}</div>
+            </div>
+            <div class="hero-meta-card">
+              <span class="label">时间窗口</span>
+              <div class="value">{html.escape(_display_time_window(plan))}</div>
+            </div>
+            <div class="hero-meta-card">
+              <span class="label">数据粒度</span>
+              <div class="value">{html.escape(_display_sampling(plan))}</div>
+            </div>
+          </div>
+        </section>
 
-    <section class="section">
-      <div class="section-head">
-        <div>
-          <h2>重点风险指标</h2>
-          <p>仅展示非正常指标，适合领导快速定位需要关注的系统和实例。</p>
-        </div>
-      </div>
-      {('<table class="risk-table"><thead><tr><th>等级</th><th>指标</th><th>对象</th><th>当前值</th><th>固定策略分析</th><th>AI 分析</th><th>建议动作</th></tr></thead><tbody>' + ''.join(risk_rows) + '</tbody></table>') if risk_rows else '<div class="empty">本次巡检没有发现需要重点汇报的异常指标。</div>'}
-    </section>
+        <section class="stat-grid">
+          <div class="stat-card">
+            <div class="label">总体风险等级</div>
+            <div class="value">{html.escape(SEVERITY_LABELS.get(str(analysis.get("severity") or "unknown"), "未知"))}</div>
+            <div class="sub">{_badge(str(analysis.get("severity") or "unknown"))}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">重点关注指标</div>
+            <div class="value">{len(risky_items)}</div>
+            <div class="sub">总计巡检 {total} 项指标</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">巡检对象</div>
+            <div class="value">{job_count}</div>
+            <div class="sub">Job 数量 / 实例数 {instance_count}</div>
+          </div>
+          <div class="stat-card">
+            <div class="label">高优先风险</div>
+            <div class="value">{counts["critical"] + counts["warning"]}</div>
+            <div class="sub">高危 {counts["critical"]} / 预警 {counts["warning"]}</div>
+          </div>
+        </section>
 
-    <section class="section">
-      <div class="section-head">
-        <div>
-          <h2>关联分析</h2>
-          <p>汇总多个指标之间的关联现象，帮助解释为什么当前实例需要优先关注。</p>
-        </div>
-      </div>
-      <div class="callout text-block">{_render_text_block(ai_correlation.get("summary") if isinstance(ai_correlation, Mapping) else "暂无 AI 关联分析结论。")}</div>
-      {('<div class="correlation-list">' + ''.join(correlation_cards) + '</div>') if correlation_cards else '<div class="empty" style="margin-top:16px;">暂无跨指标关联风险结论。</div>'}
-    </section>
+        <section id="section-summary" class="section section-anchor">
+          <div class="section-head">
+            <div class="section-title-wrap">
+              <h2>一、执行摘要</h2>
+              <p>这一部分用于汇报整体风险、优先关注对象和本次巡检说明。</p>
+            </div>
+          </div>
+          <div class="section-body">
+            <div class="overview-grid">
+              <div class="panel">
+                <h3>总体结论</h3>
+                <div class="text-block">{_render_text_block(summary_source)}</div>
+              </div>
+              <div class="panel">
+                <h3>风险统计</h3>
+                <div class="count-list">
+                  {_render_count_item("高危", counts["critical"], "critical")}
+                  {_render_count_item("预警", counts["warning"], "warning")}
+                  {_render_count_item("关注", counts["info"], "info")}
+                  {_render_count_item("正常", counts["ok"], "ok")}
+                </div>
+                <div class="note-list">
+                  {_render_note_item("分析方式", "固定策略分析 + AI 解释分析")}
+                  {_render_note_item("固定策略", "突增检测、持续增长检测、24h 预测、预计触顶时间")}
+                  {_render_note_item("风险依据", "风险统计基于 Python 固定策略计算，不以 AI 主观判断为准")}
+                </div>
+              </div>
+            </div>
+            <div class="panel" style="margin-top:16px;">
+              <h3>巡检说明</h3>
+              <div class="note-list">
+                {_render_note_item("巡检对象", _display_scope(plan.get("job"), plan.get("instance")))}
+                {_render_note_item("时间范围", _display_time_window(plan))}
+                {_render_note_item("采样说明", _display_sampling(plan))}
+                {_render_note_item("补充说明", inspection_note)}
+              </div>
+            </div>
+          </div>
+        </section>
 
-    <section class="section">
-      <div class="section-head">
-        <div>
-          <h2>分组明细</h2>
-          <p>按照 job 和 instance 逐层展开。重点风险默认展开，正常项收拢，兼顾汇报和排查。</p>
-        </div>
-      </div>
-      {''.join(detail_sections) if detail_sections else '<div class="empty">没有可展示的指标明细。</div>'}
-    </section>
+        <section id="section-focus" class="section section-anchor">
+          <div class="section-head">
+            <div class="section-title-wrap">
+              <h2>二、重点关注项</h2>
+              <p>先给出领导视角下最需要关注的对象，再进入完整指标表格。</p>
+            </div>
+          </div>
+          <div class="section-body">
+            {focus_list}
+          </div>
+        </section>
+
+        <section id="section-risks" class="section section-anchor">
+          <div class="section-head">
+            <div class="section-title-wrap">
+              <h2>三、重点风险指标</h2>
+              <p>仅展示非正常指标，适合快速定位异常实例、异常指标和建议动作。</p>
+            </div>
+          </div>
+          <div class="section-body">
+            {('<table class="risk-table"><thead><tr><th>等级</th><th>指标</th><th>对象</th><th>当前值</th><th>固定策略分析</th><th>AI 分析</th><th>建议动作</th></tr></thead><tbody>' + ''.join(risk_rows) + '</tbody></table>') if risk_rows else '<div class="empty">本次巡检没有发现需要重点汇报的异常指标。</div>'}
+          </div>
+        </section>
+
+        <section id="section-correlation" class="section section-anchor">
+          <div class="section-head">
+            <div class="section-title-wrap">
+              <h2>四、关联分析</h2>
+              <p>从多指标、多组件角度补充解释，帮助判断是否属于同一问题链路。</p>
+            </div>
+          </div>
+          <div class="section-body">
+            <div class="callout text-block">{_render_text_block(ai_correlation.get("summary") if isinstance(ai_correlation, Mapping) else "暂无 AI 关联分析结论。")}</div>
+            {('<div class="correlation-list">' + ''.join(correlation_cards) + '</div>') if correlation_cards else '<div class="empty" style="margin-top:14px;">暂无跨指标关联风险结论。</div>'}
+          </div>
+        </section>
+
+        <section id="section-details" class="section section-anchor">
+          <div class="section-head">
+            <div class="section-title-wrap">
+              <h2>五、分组明细</h2>
+              <p>按 job 和 instance 逐层展开，兼顾管理汇报和技术排查。</p>
+            </div>
+          </div>
+          <div class="section-body">
+            {''.join(detail_sections) if detail_sections else '<div class="empty">没有可展示的指标明细。</div>'}
+          </div>
+        </section>
+      </main>
+    </div>
   </div>
+  <script>
+    (function () {{
+      var toc = document.querySelector('details.toc');
+      if (!toc) return;
+      toc.querySelectorAll('.toc-link').forEach(function (link) {{
+        link.addEventListener('click', function () {{
+          toc.removeAttribute('open');
+        }});
+      }});
+    }})();
+  </script>
 </body>
 </html>"""
 
@@ -609,7 +1029,7 @@ def _build_executive_summary(
             return f"本次巡检共检查 {total} 项指标，其中 {risky_count} 项需要关注。整体风险等级为{severity}。{summary}"
     if risky_count <= 0:
         return f"本次巡检共检查 {total} 项指标，当前未发现需要重点汇报的异常，整体风险等级为{severity}。"
-    return f"本次巡检共检查 {total} 项指标，其中 {risky_count} 项需要关注，整体风险等级为{severity}。建议优先查看下方重点风险指标和关联分析。"
+    return f"本次巡检共检查 {total} 项指标，其中 {risky_count} 项需要关注，整体风险等级为{severity}。建议优先查看下方重点关注项、重点风险指标和关联分析。"
 
 
 def _group_items(items: Sequence[Mapping[str, Any]]) -> List[Tuple[str, List[Tuple[str, List[Mapping[str, Any]]]]]]:
@@ -650,14 +1070,32 @@ def _severity_rank(severity: str) -> int:
     return SEVERITY_ORDER.get(severity, -1)
 
 
+def _build_toc_items(grouped: Sequence[Tuple[str, List[Tuple[str, List[Mapping[str, Any]]]]]]) -> List[str]:
+    items: List[str] = [
+        "<a class='toc-link' href='#section-summary'>一、执行摘要</a>",
+        "<a class='toc-link' href='#section-focus'>二、重点关注项</a>",
+        "<a class='toc-link' href='#section-risks'>三、重点风险指标</a>",
+        "<a class='toc-link' href='#section-correlation'>四、关联分析</a>",
+        "<a class='toc-link' href='#section-details'>五、分组明细</a>",
+    ]
+    for job, _instances in grouped:
+        items.append(
+            f"<a class='toc-link toc-link-child' href='#{html.escape(_job_anchor(job))}'>{html.escape(job)}</a>"
+        )
+    return items
+
+
 def _render_job_section(job: str, instances: Sequence[Tuple[str, List[Mapping[str, Any]]]]) -> str:
     risky_count = sum(1 for _, values in instances for item in values if str(item.get("severity") or "unknown") != "ok")
     total = sum(len(values) for _, values in instances)
+    top_severity = max((_severity_rank(str(item.get("severity") or "unknown")) for _, values in instances for item in values), default=0)
     blocks = [_render_instance_section(instance, values) for instance, values in instances]
     return (
-        '<div style="margin-bottom:20px;">'
-        f'<div class="section-head" style="margin-bottom:10px;"><div><h2 style="font-size:18px;">{html.escape(job)}</h2>'
-        f'<p>{html.escape(f"共 {len(instances)} 个实例，巡检 {total} 项指标，需关注 {risky_count} 项。")}</p></div></div>'
+        f'<div id="{html.escape(_job_anchor(job))}" class="job-section section-anchor">'
+        '<div class="job-head">'
+        f'<div><h3>{html.escape(job)}</h3><p>{html.escape(f"共 {len(instances)} 个实例，巡检 {total} 项指标，需关注 {risky_count} 项。")}</p></div>'
+        f'<div>{_badge(_severity_from_rank(top_severity))}</div>'
+        "</div>"
         f'{"".join(blocks)}'
         "</div>"
     )
@@ -669,16 +1107,16 @@ def _render_instance_section(instance: str, items: Sequence[Mapping[str, Any]]) 
     summary = f"{len(items)} 项指标，需关注 {len(risky)} 项"
     rows = "".join(_render_detail_row(item) for item in items)
     open_attr = " open" if risky or top_severity >= _severity_rank("warning") else ""
-    badge = _badge(str(risky[0].get("severity") if risky else "ok"))
+    badge = _badge(_severity_from_rank(top_severity))
     return (
         f'<details class="instance-section"{open_attr}>'
-        '<summary>'
-        f'<div><div class="instance-title">{html.escape(instance)}</div><div class="instance-meta">{html.escape(summary)}</div></div>'
-        f'<div>{badge}</div>'
+        "<summary>"
+        f"<div><div class='instance-title'>{html.escape(instance)}</div><div class='instance-meta'>{html.escape(summary)}</div></div>"
+        f"<div>{badge}</div>"
         "</summary>"
         '<div class="instance-body">'
         '<table class="detail-table">'
-        '<thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势 / 阈值</th><th>固定策略分析</th><th>AI 分析</th></tr></thead>'
+        "<thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势摘要</th><th>固定策略分析</th><th>AI 分析</th></tr></thead>"
         f"<tbody>{rows}</tbody></table></div></details>"
     )
 
@@ -695,7 +1133,7 @@ def _render_risk_row(item: Mapping[str, Any]) -> str:
         f"<td><div>{html.escape(str(item.get('job') or ''))}</div><div class='muted'>{html.escape(str(item.get('instance') or ''))}</div></td>"
         f"<td>{html.escape(_format_value(item.get('current_value'), analysis.get('unit', '')))}{_render_progress(analysis)}</td>"
         f"<td class='text-block'>{_render_text_block(_strategy_text(item))}</td>"
-        f"<td class='text-block'>{_render_text_block(item.get('ai_comment') or '无额外 AI 补充。')}</td>"
+        f"<td class='text-block'>{_render_text_block(item.get('ai_comment') or '暂无 AI 补充分析。')}</td>"
         f"<td class='text-block'>{_render_text_block(suggestion)}</td>"
         "</tr>"
     )
@@ -710,11 +1148,38 @@ def _render_detail_row(item: Mapping[str, Any]) -> str:
         f"<td><div class='metric-name'>{html.escape(str(item.get('metric_name') or item.get('metric_id') or ''))}</div>"
         f"<div class='metric-id'>{html.escape(str(item.get('metric_id') or ''))}</div></td>"
         f"<td>{html.escape(_format_value(item.get('current_value'), analysis.get('unit', '')))}</td>"
-        f"<td>{trend_html}<div class='chips'>{''.join(_trend_chips(analysis))}</div></td>"
+        f"<td class='trend-cell'>{trend_html}<div class='chips'>{''.join(_trend_chips(analysis))}</div></td>"
         f"<td class='text-block'>{_render_text_block(_strategy_text(item))}</td>"
         f"<td class='text-block'>{_render_text_block(item.get('ai_comment') or item.get('ai_suggestion') or '无')}</td>"
         "</tr>"
     )
+
+
+def _render_focus_list(items: Sequence[Mapping[str, Any]]) -> str:
+    if not items:
+        return '<div class="empty">本次巡检未发现需要单独提请关注的风险项。</div>'
+    rows = []
+    for item in items[:6]:
+        reason = _compact_reason(item)
+        rows.append(
+            '<div class="focus-item">'
+            f"{_badge(str(item.get('severity') or 'unknown'))}"
+            '<div class="focus-main">'
+            f"<div class='focus-title'>{html.escape(str(item.get('metric_name') or item.get('metric_id') or ''))}</div>"
+            f"<div class='focus-meta'>{html.escape(str(item.get('job') or ''))} / {html.escape(str(item.get('instance') or ''))} / 当前值 {html.escape(_format_value(item.get('current_value'), _analysis_unit(item)))}</div>"
+            f"<div class='focus-reason'>{html.escape(reason)}</div>"
+            "</div>"
+            "</div>"
+        )
+    return "<div class='focus-list'>" + "".join(rows) + "</div>"
+
+
+def _compact_reason(item: Mapping[str, Any]) -> str:
+    strategy = str(_strategy_text(item) or "").strip().replace("\n", "；")
+    ai_comment = str(item.get("ai_comment") or "").strip()
+    if ai_comment:
+        return f"{strategy}。AI 分析：{ai_comment[:120]}" if strategy else ai_comment[:120]
+    return strategy or "当前需要进一步关注该指标变化。"
 
 
 def _correlation_cards(ai_correlation: Mapping[str, Any] | None) -> List[str]:
@@ -747,6 +1212,15 @@ def _render_count_item(label: str, value: int, severity: str) -> str:
     )
 
 
+def _render_note_item(label: str, value: str) -> str:
+    return (
+        '<div class="note-item">'
+        f"<div class='key'>{html.escape(label)}</div>"
+        f"<div class='value'>{html.escape(value)}</div>"
+        "</div>"
+    )
+
+
 def _display_prometheus(value: Any) -> str:
     text = str(value or "").strip()
     return text or "未指定"
@@ -765,6 +1239,26 @@ def _display_time_window(plan: Mapping[str, Any]) -> str:
         return f"{start} - {end}"
     hours = plan.get("range_hours")
     return f"最近 {hours} 小时" if hours else "最近 24 小时"
+
+
+def _display_sampling(plan: Mapping[str, Any]) -> str:
+    step = plan.get("step_seconds")
+    current_window = str(plan.get("current_window") or "").strip()
+    step_text = f"{step} 秒/点" if step else "默认采样步长"
+    if current_window:
+        return f"当前值窗口 {current_window}；范围采样 {step_text}"
+    return f"范围采样 {step_text}"
+
+
+def _build_inspection_note(plan: Mapping[str, Any], counts: Mapping[str, int], total: int) -> str:
+    if total <= 0:
+        return "本次未形成可用于展示的指标结果。"
+    high_priority = int(counts.get("critical", 0)) + int(counts.get("warning", 0))
+    if high_priority > 0:
+        return f"本次巡检存在 {high_priority} 项高优先级风险，建议优先结合 Grafana 与实例侧日志排查。"
+    if int(counts.get("info", 0)) > 0:
+        return "本次巡检以趋势类关注项为主，建议持续观察后续 24 小时变化。"
+    return "本次巡检整体平稳，未发现明显高风险指标。"
 
 
 def _format_time(value: Any) -> str:
@@ -797,6 +1291,11 @@ def _format_value(value: Any, unit: str = "") -> str:
     return f"{text}{unit}"
 
 
+def _analysis_unit(item: Mapping[str, Any]) -> str:
+    analysis = item.get("analysis") if isinstance(item.get("analysis"), Mapping) else {}
+    return str(analysis.get("unit") or "")
+
+
 def _render_progress(analysis: Mapping[str, Any]) -> str:
     percent = _progress_percent(analysis)
     if percent is None:
@@ -823,11 +1322,11 @@ def _trend_summary(analysis: Mapping[str, Any]) -> str:
     parts: List[str] = []
     forecast = analysis.get("forecast_24h")
     if forecast is not None:
-        parts.append(f"24h 预测 { _format_value(forecast, analysis.get('unit', '')) }")
+        parts.append(f"24h 预测 {_format_value(forecast, analysis.get('unit', ''))}")
     slope = analysis.get("slope_per_hour")
     if slope is not None:
-        parts.append(f"每小时变化 { _format_value(slope, analysis.get('unit', '')) }")
-    return "，".join(parts) if parts else "当前未形成有效趋势结论"
+        parts.append(f"每小时变化 {_format_value(slope, analysis.get('unit', ''))}")
+    return "；".join(parts) if parts else "当前未形成有效趋势结论"
 
 
 def _trend_chips(analysis: Mapping[str, Any]) -> List[str]:
@@ -973,6 +1472,18 @@ def _badge(severity: str) -> str:
     label = SEVERITY_LABELS.get(severity, severity or "未知")
     css = html.escape(severity or "unknown")
     return f'<span class="badge {css}">{html.escape(label)}</span>'
+
+
+def _severity_from_rank(rank: int) -> str:
+    for severity, value in SEVERITY_ORDER.items():
+        if value == rank:
+            return severity
+    return "unknown"
+
+
+def _job_anchor(job: str) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(job or "").strip()).strip("-").lower()
+    return f"job-{slug or 'unknown'}"
 
 
 def _to_float(value: Any) -> float | None:
