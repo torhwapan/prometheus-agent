@@ -234,3 +234,16 @@ CPU 最高的 10 台服务器
 - `V5`：自然语言临时问诊的提示词和 skill 资产
 
 这两个版本是并列关系，不要混在一起。
+
+
+
+todo：
+1,公司调用http请求是通过bash工具来完成的，skill需要更新
+2，http接口的参数必须要填对，但是ai只会根据用户提供来猜测参数值是什么，必须先让ai知道，这些参数的值可以是什么。 比如我问ai：帮我查下http://127.0.0.1:9090这个prometheus上监控的jvm堆使用率，它并不知道堆使用率该用jvm_heap_usage，它根据中文名拼出的是jvm-heap-usage
+3，缺乏基本的指标查询功能。 我让ai查询"帮我查下http://127.0.0.1:9090这个prometheus上监控的jvm堆使用率",它执行的curl命令是这样的：curl -X POST 'http://10.27.92.82:8050/v5/query/inspection' -H 'Content-Type: application/json' -d '{"prometheus_url": "http://127.0.0.1:9090", "semantic_key": "jvm-memory-risk", "job": "java_jmx"}， semantic_key它给的是jvm-memory-risk，把主要的jvm数据查了出来。
+4，node节点缺少cpu使用率
+5，总体使用效果不如这个skill:https://github.com/julianobarbosa/claude-code-skills/tree/main/skills/prometheus
+6，RabbitMQ Queue Consumer Utilisation 这个指标有问题，报错： timeout。
+7，node exporter监控项： cpu使用率，内存使用率，分区使用率，磁盘读取，磁盘写入，下载带宽，上传带宽； 
+jvm监控项：gc count 增加，参考（increase(jvm_gc_collection_seconds_count{job="$job",instance=~"$instance"}[$__interval])），GC time， Thread used 参考（jvm_threads_current{job="$job",instance="$instance"}），
+8，帮忙写个ppt吧
