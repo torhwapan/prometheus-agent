@@ -227,23 +227,34 @@ def render_html_report(
       min-width: 0;
     }}
     .hero {{
-      background: linear-gradient(135deg, #274767 0%, #335f87 58%, #4a7898 100%);
-      color: #fff;
+      background: linear-gradient(180deg, #fcfdfd 0%, #f6f8f9 100%);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-top: 4px solid #4b5563;
       border-radius: 18px;
       box-shadow: var(--shadow);
       padding: 26px 28px 24px;
       position: relative;
       overflow: hidden;
     }}
+    .hero::before {{
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      background: linear-gradient(180deg, #4b5563 0%, #7a846f 100%);
+    }}
     .hero::after {{
       content: "";
       position: absolute;
-      right: -60px;
-      top: -30px;
-      width: 220px;
-      height: 220px;
+      right: -90px;
+      top: -90px;
+      width: 260px;
+      height: 260px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.07);
+      background: radial-gradient(circle, rgba(75, 85, 99, 0.08) 0%, rgba(75, 85, 99, 0.03) 55%, transparent 75%);
     }}
     .hero-top {{
       display: flex;
@@ -256,7 +267,8 @@ def render_html_report(
       align-items: center;
       padding: 6px 10px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.12);
+      background: #eef1f4;
+      color: #52606d;
       font-size: 12px;
       letter-spacing: 0.04em;
     }}
@@ -264,11 +276,12 @@ def render_html_report(
       margin: 12px 0 10px;
       font-size: 32px;
       line-height: 1.18;
+      color: #15222d;
     }}
     .hero p {{
       margin: 0;
       max-width: 940px;
-      color: rgba(255, 255, 255, 0.88);
+      color: #4f6170;
       line-height: 1.72;
       font-size: 14px;
     }}
@@ -280,13 +293,13 @@ def render_html_report(
     }}
     .report-stamp .stamp-label {{
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.74);
+      color: #6d7984;
     }}
     .report-stamp .stamp-value {{
       margin-top: 6px;
       font-size: 14px;
       font-weight: 700;
-      color: #fff;
+      color: #15222d;
       word-break: break-word;
     }}
     .hero-meta {{
@@ -300,18 +313,19 @@ def render_html_report(
     .hero-meta-card {{
       padding: 12px 14px;
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
     }}
     .hero-meta-card .label {{
       display: block;
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.72);
+      color: #6d7984;
       margin-bottom: 6px;
     }}
     .hero-meta-card .value {{
       font-size: 14px;
-      color: #fff;
+      color: #15222d;
       line-height: 1.55;
       word-break: break-word;
     }}

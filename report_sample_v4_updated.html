@@ -165,23 +165,34 @@
       min-width: 0;
     }
     .hero {
-      background: linear-gradient(135deg, #274767 0%, #335f87 58%, #4a7898 100%);
-      color: #fff;
+      background: linear-gradient(180deg, #fcfdfd 0%, #f6f8f9 100%);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-top: 4px solid #4b5563;
       border-radius: 18px;
       box-shadow: var(--shadow);
       padding: 26px 28px 24px;
       position: relative;
       overflow: hidden;
     }
+    .hero::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      background: linear-gradient(180deg, #4b5563 0%, #7a846f 100%);
+    }
     .hero::after {
       content: "";
       position: absolute;
-      right: -60px;
-      top: -30px;
-      width: 220px;
-      height: 220px;
+      right: -90px;
+      top: -90px;
+      width: 260px;
+      height: 260px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.07);
+      background: radial-gradient(circle, rgba(75, 85, 99, 0.08) 0%, rgba(75, 85, 99, 0.03) 55%, transparent 75%);
     }
     .hero-top {
       display: flex;
@@ -194,7 +205,8 @@
       align-items: center;
       padding: 6px 10px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.12);
+      background: #eef1f4;
+      color: #52606d;
       font-size: 12px;
       letter-spacing: 0.04em;
     }
@@ -202,11 +214,12 @@
       margin: 12px 0 10px;
       font-size: 32px;
       line-height: 1.18;
+      color: #15222d;
     }
     .hero p {
       margin: 0;
       max-width: 940px;
-      color: rgba(255, 255, 255, 0.88);
+      color: #4f6170;
       line-height: 1.72;
       font-size: 14px;
     }
@@ -218,13 +231,13 @@
     }
     .report-stamp .stamp-label {
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.74);
+      color: #6d7984;
     }
     .report-stamp .stamp-value {
       margin-top: 6px;
       font-size: 14px;
       font-weight: 700;
-      color: #fff;
+      color: #15222d;
       word-break: break-word;
     }
     .hero-meta {
@@ -238,18 +251,19 @@
     .hero-meta-card {
       padding: 12px 14px;
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.1);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
     }
     .hero-meta-card .label {
       display: block;
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.72);
+      color: #6d7984;
       margin-bottom: 6px;
     }
     .hero-meta-card .value {
       font-size: 14px;
-      color: #fff;
+      color: #15222d;
       line-height: 1.55;
       word-break: break-word;
     }
@@ -704,7 +718,7 @@
           <div class="toc-button" aria-hidden="true"><div class="toc-icon"><span></span></div></div>
         </summary>
         <div class="toc-panel">
-          <a class='toc-link' href='#section-summary'>一、执行摘要</a><a class='toc-link' href='#section-focus'>二、重点关注项</a><a class='toc-link' href='#section-risks'>三、重点风险指标</a><a class='toc-link' href='#section-correlation'>四、关联分析</a><a class='toc-link' href='#section-details'>五、分组明细</a><a class='toc-link toc-link-child' href='#job-node_exporter'>node_exporter</a><a class='toc-link toc-link-child' href='#job-rabbitmq_exporter'>rabbitmq_exporter</a><a class='toc-link toc-link-child' href='#job-redis_exporter'>redis_exporter</a><a class='toc-link toc-link-child' href='#job-java_jmx'>java_jmx</a>
+          <a class='toc-link' href='#section-summary'>一、执行摘要</a><a class='toc-link' href='#section-focus'>二、重点关注项</a><a class='toc-link' href='#section-risks'>三、重点风险指标</a><a class='toc-link' href='#section-correlation'>四、关联分析</a><a class='toc-link' href='#section-details'>五、分组明细</a><a class='toc-link toc-link-child' href='#job-node_exporter'>node_exporter</a><a class='toc-link toc-link-child' href='#job-redis_exporter'>redis_exporter</a>
         </div>
       </details>
 
@@ -714,27 +728,27 @@
             <div>
               <div class="hero-kicker">Prometheus Inspection Report</div>
               <h1>Prometheus 巡检报告</h1>
-              <p>本次巡检共检查 7 项指标，其中 4 项需要关注。整体风险等级为预警。?????? 10.22.23.24 ?????????????Redis ????? RabbitMQ ????????????????????????????????????</p>
+              <p>本次巡检共检查 2 项指标，其中 2 项需要关注。整体风险等级为预警。????</p>
             </div>
             <div class="report-stamp">
               <div class="stamp-label">报告编号</div>
-              <div class="stamp-value">sample-v4-001</div>
+              <div class="stamp-value">demo-001</div>
               <div class="stamp-label" style="margin-top:12px;">生成时间</div>
-              <div class="stamp-value">2026-06-22 22:15:09</div>
+              <div class="stamp-value">2026-06-23 23:11:45</div>
             </div>
           </div>
           <div class="hero-meta">
             <div class="hero-meta-card">
               <span class="label">Prometheus 地址</span>
-              <div class="value">http://10.22.23.24:9090</div>
+              <div class="value">http://127.0.0.1:9090</div>
             </div>
             <div class="hero-meta-card">
               <span class="label">巡检范围</span>
-              <div class="value">全部 Job / 全部 Instance</div>
+              <div class="value">node / 全部 Instance</div>
             </div>
             <div class="hero-meta-card">
               <span class="label">时间窗口</span>
-              <div class="value">2026-06-21 00:00 - 2026-06-22 00:00</div>
+              <div class="value">最近 24 小时</div>
             </div>
             <div class="hero-meta-card">
               <span class="label">数据粒度</span>
@@ -751,13 +765,13 @@
           </div>
           <div class="stat-card">
             <div class="label">重点关注指标</div>
-            <div class="value">4</div>
-            <div class="sub">总计巡检 7 项指标</div>
+            <div class="value">2</div>
+            <div class="sub">总计巡检 2 项指标</div>
           </div>
           <div class="stat-card">
             <div class="label">巡检对象</div>
-            <div class="value">4</div>
-            <div class="sub">Job 数量 / 实例数 5</div>
+            <div class="value">2</div>
+            <div class="sub">Job 数量 / 实例数 2</div>
           </div>
           <div class="stat-card">
             <div class="label">高优先风险</div>
@@ -777,7 +791,7 @@
             <div class="overview-grid">
               <div class="panel">
                 <h3>总体结论</h3>
-                <div class="text-block"><p>?????? 10.22.23.24 ?????????????Redis ????? RabbitMQ ????????????????????????????????????</p></div>
+                <div class="text-block"><p>????</p></div>
               </div>
               <div class="panel">
                 <h3>风险统计</h3>
@@ -785,7 +799,7 @@
                   <div class="count-item"><strong>1</strong><span>高危</span> <span class="badge critical">高危</span></div>
                   <div class="count-item"><strong>2</strong><span>预警</span> <span class="badge warning">预警</span></div>
                   <div class="count-item"><strong>1</strong><span>关注</span> <span class="badge info">关注</span></div>
-                  <div class="count-item"><strong>3</strong><span>正常</span> <span class="badge ok">正常</span></div>
+                  <div class="count-item"><strong>4</strong><span>正常</span> <span class="badge ok">正常</span></div>
                 </div>
                 <div class="note-list">
                   <div class="note-item"><div class='key'>分析方式</div><div class='value'>固定策略分析 + AI 解释分析</div></div>
@@ -797,8 +811,8 @@
             <div class="panel" style="margin-top:16px;">
               <h3>巡检说明</h3>
               <div class="note-list">
-                <div class="note-item"><div class='key'>巡检对象</div><div class='value'>全部 Job / 全部 Instance</div></div>
-                <div class="note-item"><div class='key'>时间范围</div><div class='value'>2026-06-21 00:00 - 2026-06-22 00:00</div></div>
+                <div class="note-item"><div class='key'>巡检对象</div><div class='value'>node / 全部 Instance</div></div>
+                <div class="note-item"><div class='key'>时间范围</div><div class='value'>最近 24 小时</div></div>
                 <div class="note-item"><div class='key'>采样说明</div><div class='value'>当前值窗口 5m；范围采样 60 秒/点</div></div>
                 <div class="note-item"><div class='key'>补充说明</div><div class='value'>本次巡检存在 3 项高优先级风险，建议优先结合 Grafana 与实例侧日志排查。</div></div>
               </div>
@@ -814,7 +828,7 @@
             </div>
           </div>
           <div class="section-body">
-            <div class='focus-list'><div class="focus-item"><span class="badge critical">高危</span><div class="focus-main"><div class='focus-title'>?????</div><div class='focus-meta'>node_exporter / 10.22.23.24:9100 / 当前值 92.40%</div><div class='focus-reason'>突增检测：未发现突增；持续增长检测：发现持续增长；24h 预测值：95.10%；预计触顶时间：0.0 小时。AI 分析：????????? 24 ?????????????? JVM/???????</div></div></div><div class="focus-item"><span class="badge warning">预警</span><div class="focus-main"><div class='focus-title'>RabbitMQ Ready ???</div><div class='focus-meta'>rabbitmq_exporter / 10.22.23.24:9419 / 当前值 1280.0</div><div class='focus-reason'>突增检测：发现突增；持续增长检测：发现持续增长；24h 预测值：1660.0；预计触顶时间：108.0 小时。AI 分析：????????????????????????????????</div></div></div><div class="focus-item"><span class="badge warning">预警</span><div class="focus-main"><div class='focus-title'>CPU ???</div><div class='focus-meta'>node_exporter / 10.22.23.24:9100 / 当前值 78.60%</div><div class='focus-reason'>突增检测：发现突增；持续增长检测：发现持续增长；24h 预测值：84.20%；预计触顶时间：14.5 小时。AI 分析：CPU ???????????????????????????????????</div></div></div><div class="focus-item"><span class="badge info">关注</span><div class="focus-main"><div class='focus-title'>Redis ???</div><div class='focus-meta'>redis_exporter / 10.22.23.24:9121 / 当前值 346.0</div><div class='focus-reason'>突增检测：未发现突增；持续增长检测：发现持续增长；24h 预测值：490.0；预计触顶时间：75.0 小时。AI 分析：?????????????????????</div></div></div></div>
+            <div class='focus-list'><div class="focus-item"><span class="badge warning">预警</span><div class="focus-main"><div class='focus-title'>CPU ???</div><div class='focus-meta'>node_exporter / 10.22.23.24:9100 / 当前值 78.60%</div><div class='focus-reason'>固定策略未发现明显趋势异常。</div></div></div><div class="focus-item"><span class="badge info">关注</span><div class="focus-main"><div class='focus-title'>Redis ?????</div><div class='focus-meta'>redis_exporter / 10.22.23.24:9121 / 当前值 64.80%</div><div class='focus-reason'>固定策略未发现明显趋势异常。</div></div></div></div>
           </div>
         </section>
 
@@ -826,7 +840,7 @@
             </div>
           </div>
           <div class="section-body">
-            <table class="risk-table"><thead><tr><th>等级</th><th>指标</th><th>对象</th><th>当前值</th><th>固定策略分析</th><th>AI 分析</th><th>建议动作</th></tr></thead><tbody><tr><td><span class="badge critical">高危</span></td><td><div class='metric-name'>?????</div><div class='metric-id'>node_memory_usage</div><div class='chips'><span class="chip">持续增长</span><span class="chip">0.0h 可能触顶</span></div></td><td><div>node_exporter</div><div class='muted'>10.22.23.24:9100</div></td><td>92.40%<div class="progress"><span style="width:100%"></span></div></td><td class='text-block'><p>突增检测：未发现突增 持续增长检测：发现持续增长 24h 预测值：95.10% 预计触顶时间：0.0 小时</p></td><td class='text-block'><p>????????? 24 ?????????????? JVM/???????</p></td><td class='text-block'><p>建议优先安排运维排查该实例及上下游依赖，并结合 Grafana 继续观察变化。</p></td></tr><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>RabbitMQ Ready ???</div><div class='metric-id'>rabbitmq_queue_messages_ready</div><div class='chips'><span class="chip">存在突增</span><span class="chip">持续增长</span><span class="chip">108.0h 可能触顶</span></div></td><td><div>rabbitmq_exporter</div><div class='muted'>10.22.23.24:9419</div></td><td>1280.0<div class="progress"><span style="width:43%"></span></div></td><td class='text-block'><p>突增检测：发现突增 持续增长检测：发现持续增长 24h 预测值：1660.0 预计触顶时间：108.0 小时</p></td><td class='text-block'><p>????????????????????????????????</p></td><td class='text-block'><p>?????????????????</p></td></tr><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>CPU ???</div><div class='metric-id'>node_cpu_usage</div><div class='chips'><span class="chip">存在突增</span><span class="chip">持续增长</span><span class="chip">14.5h 可能触顶</span></div></td><td><div>node_exporter</div><div class='muted'>10.22.23.24:9100</div></td><td>78.60%<div class="progress"><span style="width:87%"></span></div></td><td class='text-block'><p>突增检测：发现突增 持续增长检测：发现持续增长 24h 预测值：84.20% 预计触顶时间：14.5 小时</p></td><td class='text-block'><p>CPU ???????????????????????????????????</p></td><td class='text-block'><p>?????????????????</p></td></tr><tr><td><span class="badge info">关注</span></td><td><div class='metric-name'>Redis ???</div><div class='metric-id'>redis_connected_clients</div><div class='chips'><span class="chip">持续增长</span><span class="chip">75.0h 可能触顶</span></div></td><td><div>redis_exporter</div><div class='muted'>10.22.23.24:9121</div></td><td>346.0<div class="progress"><span style="width:35%"></span></div></td><td class='text-block'><p>突增检测：未发现突增 持续增长检测：发现持续增长 24h 预测值：490.0 预计触顶时间：75.0 小时</p></td><td class='text-block'><p>?????????????????????</p></td><td class='text-block'><p>建议保持关注，继续观察后续趋势变化。</p></td></tr></tbody></table>
+            <table class="risk-table"><thead><tr><th>等级</th><th>指标</th><th>对象</th><th>当前值</th><th>固定策略分析</th><th>AI 分析</th><th>建议动作</th></tr></thead><tbody><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>CPU ???</div><div class='metric-id'>node_cpu_usage</div><div class='chips'></div></td><td><div>node_exporter</div><div class='muted'>10.22.23.24:9100</div></td><td>78.60%</td><td class='text-block'><p>固定策略未发现明显趋势异常。</p></td><td class='text-block'><p>暂无 AI 补充分析。</p></td><td class='text-block'><p>建议优先安排运维排查该实例及上下游依赖，并结合 Grafana 继续观察变化。</p></td></tr><tr><td><span class="badge info">关注</span></td><td><div class='metric-name'>Redis ?????</div><div class='metric-id'>redis_memory_usage</div><div class='chips'></div></td><td><div>redis_exporter</div><div class='muted'>10.22.23.24:9121</div></td><td>64.80%</td><td class='text-block'><p>固定策略未发现明显趋势异常。</p></td><td class='text-block'><p>暂无 AI 补充分析。</p></td><td class='text-block'><p>建议保持关注，继续观察后续趋势变化。</p></td></tr></tbody></table>
           </div>
         </section>
 
@@ -838,8 +852,8 @@
             </div>
           </div>
           <div class="section-body">
-            <div class="callout text-block"><p>?????? 10.22.23.24 ?????????????Redis ????? RabbitMQ ????????????????????????????????????</p></div>
-            <div class="correlation-list"><div class="correlation-card"><span class="badge warning">预警</span><h3>node_exporter, redis_exporter, rabbitmq_exporter</h3><p><strong>涉及实例：</strong>10.22.23.24:9100, 10.22.23.24:9121, 10.22.23.24:9419</p><div class='text-block'><p>CPU????????? Redis ?????????????????????????</p></div><div class='text-block'><p>?????????????????????????????????</p></div></div></div>
+            <div class="callout text-block"><p>????</p></div>
+            <div class="empty" style="margin-top:14px;">暂无跨指标关联风险结论。</div>
           </div>
         </section>
 
@@ -851,7 +865,7 @@
             </div>
           </div>
           <div class="section-body">
-            <div id="job-node_exporter" class="job-section section-anchor"><div class="job-head"><div><h3>node_exporter</h3><p>共 1 个实例，巡检 2 项指标，需关注 2 项。</p></div><div><span class="badge critical">高危</span></div></div><details class="instance-section" open><summary><div><div class='instance-title'>10.22.23.24:9100</div><div class='instance-meta'>2 项指标，需关注 2 项</div></div><div><span class="badge critical">高危</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势摘要</th><th>固定策略分析</th><th>AI 分析</th></tr></thead><tbody><tr><td><span class="badge critical">高危</span></td><td><div class='metric-name'>?????</div><div class='metric-id'>node_memory_usage</div></td><td>92.40%</td><td class='trend-cell'><div class='muted'>24h 预测 95.10%；每小时变化 0.110%</div><div class="progress"><span style="width:100%"></span></div><div class='chips'><span class="chip">持续增长</span><span class="chip">0.0h 可能触顶</span></div></td><td class='text-block'><p>突增检测：未发现突增 持续增长检测：发现持续增长 24h 预测值：95.10% 预计触顶时间：0.0 小时</p></td><td class='text-block'><p>????????? 24 ?????????????? JVM/???????</p></td></tr><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>CPU ???</div><div class='metric-id'>node_cpu_usage</div></td><td>78.60%</td><td class='trend-cell'><div class='muted'>24h 预测 84.20%；每小时变化 0.230%</div><div class="progress"><span style="width:87%"></span></div><div class='chips'><span class="chip">存在突增</span><span class="chip">持续增长</span><span class="chip">14.5h 可能触顶</span></div></td><td class='text-block'><p>突增检测：发现突增 持续增长检测：发现持续增长 24h 预测值：84.20% 预计触顶时间：14.5 小时</p></td><td class='text-block'><p>CPU ???????????????????????????????????</p></td></tr></tbody></table></div></details></div><div id="job-rabbitmq_exporter" class="job-section section-anchor"><div class="job-head"><div><h3>rabbitmq_exporter</h3><p>共 1 个实例，巡检 1 项指标，需关注 1 项。</p></div><div><span class="badge warning">预警</span></div></div><details class="instance-section" open><summary><div><div class='instance-title'>10.22.23.24:9419</div><div class='instance-meta'>1 项指标，需关注 1 项</div></div><div><span class="badge warning">预警</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势摘要</th><th>固定策略分析</th><th>AI 分析</th></tr></thead><tbody><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>RabbitMQ Ready ???</div><div class='metric-id'>rabbitmq_queue_messages_ready</div></td><td>1280.0</td><td class='trend-cell'><div class='muted'>24h 预测 1660.0；每小时变化 15.80</div><div class="progress"><span style="width:43%"></span></div><div class='chips'><span class="chip">存在突增</span><span class="chip">持续增长</span><span class="chip">108.0h 可能触顶</span></div></td><td class='text-block'><p>突增检测：发现突增 持续增长检测：发现持续增长 24h 预测值：1660.0 预计触顶时间：108.0 小时</p></td><td class='text-block'><p>????????????????????????????????</p></td></tr></tbody></table></div></details></div><div id="job-redis_exporter" class="job-section section-anchor"><div class="job-head"><div><h3>redis_exporter</h3><p>共 2 个实例，巡检 2 项指标，需关注 1 项。</p></div><div><span class="badge info">关注</span></div></div><details class="instance-section" open><summary><div><div class='instance-title'>10.22.23.24:9121</div><div class='instance-meta'>1 项指标，需关注 1 项</div></div><div><span class="badge info">关注</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势摘要</th><th>固定策略分析</th><th>AI 分析</th></tr></thead><tbody><tr><td><span class="badge info">关注</span></td><td><div class='metric-name'>Redis ???</div><div class='metric-id'>redis_connected_clients</div></td><td>346.0</td><td class='trend-cell'><div class='muted'>24h 预测 490.0；每小时变化 6.000</div><div class="progress"><span style="width:35%"></span></div><div class='chips'><span class="chip">持续增长</span><span class="chip">75.0h 可能触顶</span></div></td><td class='text-block'><p>突增检测：未发现突增 持续增长检测：发现持续增长 24h 预测值：490.0 预计触顶时间：75.0 小时</p></td><td class='text-block'><p>?????????????????????</p></td></tr></tbody></table></div></details><details class="instance-section"><summary><div><div class='instance-title'>10.22.23.25:9121</div><div class='instance-meta'>1 项指标，需关注 0 项</div></div><div><span class="badge ok">正常</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势摘要</th><th>固定策略分析</th><th>AI 分析</th></tr></thead><tbody><tr><td><span class="badge ok">正常</span></td><td><div class='metric-name'>Redis ?????</div><div class='metric-id'>redis_memory_usage</div></td><td>64.80%</td><td class='trend-cell'><div class='muted'>24h 预测 66.00%；每小时变化 0.050%</div><div class="progress"><span style="width:72%"></span></div><div class='chips'></div></td><td class='text-block'><p>突增检测：未发现突增 持续增长检测：未发现持续增长</p></td><td class='text-block'><p>无</p></td></tr></tbody></table></div></details></div><div id="job-java_jmx" class="job-section section-anchor"><div class="job-head"><div><h3>java_jmx</h3><p>共 1 个实例，巡检 2 项指标，需关注 0 项。</p></div><div><span class="badge ok">正常</span></div></div><details class="instance-section"><summary><div><div class='instance-title'>10.22.23.24:9404</div><div class='instance-meta'>2 项指标，需关注 0 项</div></div><div><span class="badge ok">正常</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势摘要</th><th>固定策略分析</th><th>AI 分析</th></tr></thead><tbody><tr><td><span class="badge ok">正常</span></td><td><div class='metric-name'>JVM ?????</div><div class='metric-id'>jvm_threads_current</div></td><td>188.0</td><td class='trend-cell'><div class='muted'>24h 预测 192.0；每小时变化 0.200</div><div class="progress"><span style="width:24%"></span></div><div class='chips'></div></td><td class='text-block'><p>突增检测：未发现突增 持续增长检测：未发现持续增长</p></td><td class='text-block'><p>无</p></td></tr><tr><td><span class="badge ok">正常</span></td><td><div class='metric-name'>GC ????</div><div class='metric-id'>jvm_gc_count_increase</div></td><td>12.00</td><td class='trend-cell'><div class='muted'>24h 预测 13.00；每小时变化 0.050</div><div class="progress"><span style="width:10%"></span></div><div class='chips'></div></td><td class='text-block'><p>突增检测：未发现突增 持续增长检测：未发现持续增长</p></td><td class='text-block'><p>无</p></td></tr></tbody></table></div></details></div>
+            <div id="job-node_exporter" class="job-section section-anchor"><div class="job-head"><div><h3>node_exporter</h3><p>共 1 个实例，巡检 1 项指标，需关注 1 项。</p></div><div><span class="badge warning">预警</span></div></div><details class="instance-section" open><summary><div><div class='instance-title'>10.22.23.24:9100</div><div class='instance-meta'>1 项指标，需关注 1 项</div></div><div><span class="badge warning">预警</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势摘要</th><th>固定策略分析</th><th>AI 分析</th></tr></thead><tbody><tr><td><span class="badge warning">预警</span></td><td><div class='metric-name'>CPU ???</div><div class='metric-id'>node_cpu_usage</div></td><td>78.60%</td><td class='trend-cell'><div class='muted'>24h 预测 84.20%；每小时变化 0.230%</div><div class='chips'></div></td><td class='text-block'><p>固定策略未发现明显趋势异常。</p></td><td class='text-block'><p>无</p></td></tr></tbody></table></div></details></div><div id="job-redis_exporter" class="job-section section-anchor"><div class="job-head"><div><h3>redis_exporter</h3><p>共 1 个实例，巡检 1 项指标，需关注 1 项。</p></div><div><span class="badge info">关注</span></div></div><details class="instance-section" open><summary><div><div class='instance-title'>10.22.23.24:9121</div><div class='instance-meta'>1 项指标，需关注 1 项</div></div><div><span class="badge info">关注</span></div></summary><div class="instance-body"><table class="detail-table"><thead><tr><th>等级</th><th>指标</th><th>当前值</th><th>趋势摘要</th><th>固定策略分析</th><th>AI 分析</th></tr></thead><tbody><tr><td><span class="badge info">关注</span></td><td><div class='metric-name'>Redis ?????</div><div class='metric-id'>redis_memory_usage</div></td><td>64.80%</td><td class='trend-cell'><div class='muted'>24h 预测 66.00%；每小时变化 0.050%</div><div class='chips'></div></td><td class='text-block'><p>固定策略未发现明显趋势异常。</p></td><td class='text-block'><p>无</p></td></tr></tbody></table></div></details></div>
           </div>
         </section>
       </main>
