@@ -293,3 +293,10 @@ jvm监控项：gc count 增加，参考（increase(jvm_gc_collection_seconds_cou
 好的，用户让我查询Prometheus实例上的jobs，我之前尝试直接使用prometheus技能，但发现无效，于是改用bash命令执行curl请求。现在得到了响应，需要解析结果。首先看输出中的data.activeTargets数组，每个目标都有job字段。
 观察到的jobs有java_jmx、node_exporter、prometheus、rabbitmq_exporter、redis_exporter和thread_pool_exporter。需要注意的是，虽然java_jmx出现了多次，但可能属于同一个job的不同实例。需要整理出唯一的job名称，并列出对应的实例地址和状态。
 另外，所有目标的健康状态都是down，错误原因包括连接被拒绝和磁盘空间不足。需要将这些信息整理成用户友好的格式，说明每个job的实例和问题所在。同时，用户可能关心如何解决这些问题，比如检查端口是否开放或清理磁盘空间。但用户当前的需求主要是列出jobs，所以先聚焦在结果上，再简要提及可能的问题。
+
+
+namespace和application维度的：
+jvm_buffer_count_buffers{application="System1", cluster="b248b1e7", cluster_name="prod-System1", endpoint="tcp-9000", id="direct", instance="19.19.19.19:8080", job="system-actuator-prometheus", k8s_cluster_name="prod-System1", namespace="test", pod="system1-8bcb965dd", prometheus="insight-system/insight-agent-kube-prometh-prometheus", service="system-actuator-prometheus"}
+
+
+
