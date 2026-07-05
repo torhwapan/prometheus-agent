@@ -944,3 +944,9 @@ AI Agent的作用：
 
 
 https://github.com/AsyncFuncAI/deepwiki-open?tab=readme-ov-file
+
+
+
+{1 item
+"command":string"find /home/runner -name "prometheus_agent_v6" -type d 2>/dev/null"
+}
