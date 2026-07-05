@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prometheus Fixed Inspection"
+  short_description: "Run fixed Prometheus inspections with direct API steps."
+  default_prompt: "Use $prometheus-fixed-inspection to inspect a Prometheus endpoint with fixed queries and generate one HTML report."

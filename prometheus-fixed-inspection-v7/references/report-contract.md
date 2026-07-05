@@ -6,7 +6,7 @@ The final deliverable is a single HTML file.
 
 - Output exactly one HTML report unless the user explicitly requests additional artifacts.
 - Prefer a concrete path such as `report_v7.html` inside the workspace.
-- The HTML must come from the deterministic renderer in `prometheus_agent_v6.report`.
+- The HTML must come from the deterministic renderer bundled with this skill.
 
 ## Required Report Sections
 

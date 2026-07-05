@@ -12,7 +12,7 @@ This skill is for deterministic Prometheus inspection, not ad hoc natural-langua
 ## Fixed Behavior
 
 - Discover jobs from the target Prometheus instance.
-- Match discovered jobs to the fixed inspection packs in `prometheus_agent_v6.catalog`.
+- Match discovered jobs to the fixed inspection packs in the bundled engine catalog.
 - Run the predefined metric set and PromQL only.
 - Apply deterministic rule analysis only.
 - Generate one fixed-format HTML report.

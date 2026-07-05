@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prometheus Fixed Inspection Report</title>
+  <style>
+    :root {
+      --bg: #f3f5f8;
+      --panel: #ffffff;
+      --ink: #1f2937;
+      --muted: #667085;
+      --line: #d0d5dd;
+      --accent: #0f766e;
+      --critical: #b42318;
+      --critical-bg: #fee4e2;
+      --warning: #b54708;
+      --warning-bg: #ffefd5;
+      --info: #175cd3;
+      --info-bg: #dbeafe;
+      --ok: #067647;
+      --ok-bg: #dcfae6;
+      --unknown: #475467;
+      --unknown-bg: #e4e7ec;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.12), transparent 24rem),
+        linear-gradient(180deg, #eef5f3 0%, var(--bg) 18rem);
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    }
+    .page { max-width: 1360px; margin: 0 auto; padding: 32px 24px 48px; }
+    .hero {
+      background: linear-gradient(135deg, #0f172a, #134e4a);
+      color: #fff;
+      border-radius: 20px;
+      padding: 28px 32px;
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+    }
+    .hero h1 { margin: 0 0 8px; font-size: 30px; }
+    .hero p { margin: 0; color: rgba(255,255,255,0.82); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 18px;
+      padding: 18px 20px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+    }
+    .card strong { display: block; font-size: 28px; margin-top: 6px; }
+    .section {
+      margin-top: 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.04);
+    }
+    .section h2 { margin: 0 0 14px; font-size: 20px; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .meta-item {
+      background: #f8fafc;
+      border: 1px solid #e4e7ec;
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+    .meta-item .label { color: var(--muted); font-size: 13px; }
+    .meta-item .value { margin-top: 6px; word-break: break-all; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid #e4e7ec;
+      padding: 12px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    tr:last-child td { border-bottom: none; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .critical { color: var(--critical); background: var(--critical-bg); }
+    .warning { color: var(--warning); background: var(--warning-bg); }
+    .info { color: var(--info); background: var(--info-bg); }
+    .ok { color: var(--ok); background: var(--ok-bg); }
+    .unknown { color: var(--unknown); background: var(--unknown-bg); }
+    .mono { font-family: Consolas, "Courier New", monospace; font-size: 12px; }
+    .muted { color: var(--muted); }
+    ul { margin: 0; padding-left: 20px; }
+    @media (max-width: 840px) {
+      .page { padding: 20px 14px 32px; }
+      .hero { padding: 22px 20px; }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>Prometheus Fixed Inspection Report</h1>
+      <p>Generated at: {{GENERATED_AT}}</p>
+      <div class="grid">
+        <div class="card"><span class="muted">Overall severity</span><strong>{{OVERALL_SEVERITY}}</strong></div>
+        <div class="card"><span class="muted">Pack count</span><strong>{{PACK_COUNT}}</strong></div>
+        <div class="card"><span class="muted">Finding count</span><strong>{{FINDING_COUNT}}</strong></div>
+        <div class="card"><span class="muted">Active targets</span><strong>{{ACTIVE_TARGET_COUNT}}</strong></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Inspection Scope</h2>
+      <div class="meta">
+        <div class="meta-item">
+          <div class="label">Prometheus URL</div>
+          <div class="value mono">{{PROMETHEUS_URL}}</div>
+        </div>
+        <div class="meta-item">
+          <div class="label">Instance filter</div>
+          <div class="value">{{INSTANCE_FILTER}}</div>
+        </div>
+        <div class="meta-item">
+          <div class="label">Discovered jobs</div>
+          <div class="value">{{DISCOVERED_JOBS}}</div>
+        </div>
+        <div class="meta-item">
+          <div class="label">Counts</div>
+          <div class="value">{{COUNTS_LINE}}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Selected Packs</h2>
+      <table>
+        <thead>
+          <tr><th>Pack</th><th>Job</th><th>Metric count</th><th>Description</th></tr>
+        </thead>
+        <tbody>{{PACK_ROWS}}</tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>Findings</h2>
+      {{AI_SUMMARY_BLOCK}}
+      {{WARNINGS_BLOCK}}
+      <table>
+        <thead>
+          <tr>
+            <th>Severity</th>
+            <th>Pack</th>
+            <th>Job / Instance</th>
+            <th>Metric</th>
+            <th>Current value</th>
+            <th>Rule reason</th>
+            <th>AI comment</th>
+            <th>Labels</th>
+          </tr>
+        </thead>
+        <tbody>{{FINDING_ROWS}}</tbody>
+      </table>
+    </section>
+  </div>
+</body>
+</html>

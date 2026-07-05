@@ -7,7 +7,7 @@ description: "Generate a fixed-format Prometheus inspection report by running a 
 
 Run the fixed inspection workflow instead of improvising.
 
-Use the bundled script to generate the report. Do not manually rebuild the workflow unless the script is broken.
+Use the bundled script to generate the report. The skill includes its own bundled inspection engine under `scripts/`, so it should not depend on an external checkout of `prometheus_agent_v6`.
 
 ## Workflow
 
@@ -52,7 +52,7 @@ If AI should be skipped, append:
 
 ## Guardrails
 
-- Treat `prometheus_agent_v6` as the execution engine.
+- Treat the bundled engine under `scripts/prometheus_agent_v6` as the execution engine.
 - Keep the report contract fixed.
 - Keep metrics and PromQL fixed.
 - Keep rule severity deterministic.
