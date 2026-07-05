@@ -1,0 +1,4 @@
+interface:
+  display_name: "Prometheus Fixed Inspection V7"
+  short_description: "Run fixed Prometheus HTML inspections."
+  default_prompt: "Use $prometheus-fixed-inspection-v7 to inspect a Prometheus endpoint and generate the fixed HTML report."
