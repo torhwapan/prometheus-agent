@@ -945,6 +945,14 @@ AI Agent的作用：
 
 https://github.com/AsyncFuncAI/deepwiki-open?tab=readme-ov-file
 
+1， prometheus  agent是编写一个完整的巡检脚本来执行。但是LLM来编写脚本的稳定性很差。 比如它在自己写的 inspect.py 中，错误地将 Prometheus API 返回的 value 数组结构理解为 [timestamp, value] 时，错误地取了 value[1]（指标值），而实际上 value[0] 才是时间戳。
+2， 算了，直接重新巡检吧。我现在有LLM大模型。
+
+3， 
+先把无用代码去了，比如db分析，日志的获取及分析等。
+父Agent： 理解用户意图（是要解析代码吗，是的话，就调用子agent）、前置通用信息的解析，如厂别，系统等
+子agent:  需要额指定业务参数，如厂别，系统。如果没有的话，子agent要追问，直到拿到所需数据后，调用这个http的插件。
+两个agent都需要对应的提示词。
 
 
 {1 item
